@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="src/UluBilge.Api/UluBilge.Api.csproj" />
+  <Project Path="src/UluBilge.App/UluBilge.App.csproj" />
+  <Project Path="src/UluBilge.Core/UluBilge.Core.csproj" />
+  <Project Path="src/UluBilge.Data/UluBilge.Data.csproj" />
+  <Project Path="src/UluBilge.Migration/UluBilge.Migration.csproj" />
+</Solution>
