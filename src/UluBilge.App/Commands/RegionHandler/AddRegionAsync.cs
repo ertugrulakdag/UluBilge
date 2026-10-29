@@ -3,43 +3,44 @@ using UluBilge.Core.Commands;
 using UluBilge.Core.Entities;
 using UluBilge.Data.Abstract;
 
-namespace UluBilge.App.Commands.RegionHandler;
-
-public static class AddRegionAsync
+namespace UluBilge.App.Commands.RegionHandler
 {
-    public sealed class Command : ICommand<Result>
+    public static class AddRegionAsync
     {
-        [Range(1, int.MaxValue, ErrorMessage = "Bölge numarası sıfırdan büyük olmalıdır.")]
-        public int RegionId { get; set; }
-
-        [Required(ErrorMessage = "Bölge açıklaması zorunludur.")]
-        [StringLength(50, ErrorMessage = "Bölge açıklaması en fazla 50 karakter olabilir.")]
-        public string RegionDescription { get; set; } = string.Empty;
-    }
-
-    public sealed class Result
-    {
-        public bool Status { get; init; }
-        public int RegionId { get; init; }
-    }
-
-    public sealed class HandlerAsync(IRegionRepository regionRepository) : IAsyncCommandHandler<Command, Result>
-    {
-        public async Task<Result> HandleAsync(Command command, CancellationToken ct = default)
+        public sealed class Command : ICommand<Result>
         {
-            var region = new Region
-            {
-                RegionId = command.RegionId,
-                RegionDescription = command.RegionDescription.Trim()
-            };
+            [Range(1, int.MaxValue, ErrorMessage = "Bölge numarası sıfırdan büyük olmalıdır.")]
+            public int RegionId { get; set; }
 
-            var affectedRows = await regionRepository.InsertAsync(region, ct);
-            if (affectedRows <= 0)
+            [Required(ErrorMessage = "Bölge açıklaması zorunludur.")]
+            [StringLength(50, ErrorMessage = "Bölge açıklaması en fazla 50 karakter olabilir.")]
+            public string RegionDescription { get; set; } = string.Empty;
+        }
+
+        public sealed class Result
+        {
+            public bool Status { get; init; }
+            public int RegionId { get; init; }
+        }
+
+        public sealed class HandlerAsync(IRegionRepository regionRepository) : IAsyncCommandHandler<Command, Result>
+        {
+            public async Task<Result> HandleAsync(Command command, CancellationToken ct = default)
             {
-                throw new InvalidOperationException("Bölge oluşturulamadı.");
+                var region = new Region
+                {
+                    RegionId = command.RegionId,
+                    RegionDescription = command.RegionDescription.Trim()
+                };
+
+                var affectedRows = await regionRepository.InsertAsync(region, ct);
+                if (affectedRows <= 0)
+                {
+                    throw new InvalidOperationException("Bölge oluşturulamadı.");
+                }
+
+                return new Result { Status = true, RegionId = region.RegionId };
             }
-
-            return new Result { Status = true, RegionId = region.RegionId };
         }
     }
 }

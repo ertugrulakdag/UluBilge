@@ -1,12 +1,9 @@
-namespace UluBilge.Api.Authentication;
-
-public interface IAccessTokenService
+namespace UluBilge.Api.Authentication
 {
-    AccessTokenResponse Create(AuthenticatedUser user);
-}
+    public interface IAccessTokenService
+    {
+        AccessTokenResponse Create(AuthenticatedUser user);
+    }
 
-public sealed record AccessTokenResponse(
-    string AccessToken,
-    string TokenType,
-    int ExpiresIn,
-    DateTimeOffset ExpiresAtUtc);
+    public sealed record AccessTokenResponse(string AccessToken, string TokenType, int ExpiresIn, DateTimeOffset ExpiresAtUtc);
+}

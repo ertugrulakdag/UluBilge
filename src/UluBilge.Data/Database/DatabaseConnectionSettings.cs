@@ -1,41 +1,42 @@
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 
-namespace UluBilge.Data.Database;
-
-public sealed class DatabaseConnectionSettings
+namespace UluBilge.Data.Database
 {
-    public string ReadConnection { get; }
-    public string WriteConnection { get; }
-
-    public DatabaseConnectionSettings(IConfiguration configuration)
+    public sealed class DatabaseConnectionSettings
     {
-        ReadConnection = GetValidatedConnectionString(configuration, nameof(ReadConnection));
-        WriteConnection = GetValidatedConnectionString(configuration, nameof(WriteConnection));
-    }
+        public string ReadConnection { get; }
+        public string WriteConnection { get; }
 
-    private static string GetValidatedConnectionString(IConfiguration configuration, string name)
-    {
-        var connectionString = configuration.GetConnectionString(name);
-        if (string.IsNullOrWhiteSpace(connectionString))
+        public DatabaseConnectionSettings(IConfiguration configuration)
         {
-            throw new InvalidOperationException($"ConnectionStrings:{name} bağlantı bilgisi zorunludur.");
+            ReadConnection = GetValidatedConnectionString(configuration, nameof(ReadConnection));
+            WriteConnection = GetValidatedConnectionString(configuration, nameof(WriteConnection));
         }
 
-        try
+        private static string GetValidatedConnectionString(IConfiguration configuration, string name)
         {
-            var builder = new SqlConnectionStringBuilder(connectionString);
-            if (string.IsNullOrWhiteSpace(builder.DataSource) || string.IsNullOrWhiteSpace(builder.InitialCatalog))
+            var connectionString = configuration.GetConnectionString(name);
+            if (string.IsNullOrWhiteSpace(connectionString))
             {
-                throw new InvalidOperationException($"ConnectionStrings:{name} bağlantı bilgisinde sunucu ve veritabanı belirtilmelidir.");
+                throw new InvalidOperationException($"ConnectionStrings:{name} bağlantı bilgisi zorunludur.");
             }
-        }
-        catch (ArgumentException)
-        {
-            // Bağlantı bilgisini ve ayrıştırma ayrıntılarını hata mesajına eklemeyin.
-            throw new InvalidOperationException($"ConnectionStrings:{name} geçerli bir SQL Server bağlantı bilgisi değildir.");
-        }
 
-        return connectionString;
+            try
+            {
+                var builder = new SqlConnectionStringBuilder(connectionString);
+                if (string.IsNullOrWhiteSpace(builder.DataSource) || string.IsNullOrWhiteSpace(builder.InitialCatalog))
+                {
+                    throw new InvalidOperationException($"ConnectionStrings:{name} bağlantı bilgisinde sunucu ve veritabanı belirtilmelidir.");
+                }
+            }
+            catch (ArgumentException)
+            {
+                // Bağlantı bilgisini ve ayrıştırma ayrıntılarını hata mesajına eklemeyin.
+                throw new InvalidOperationException($"ConnectionStrings:{name} geçerli bir SQL Server bağlantı bilgisi değildir.");
+            }
+
+            return connectionString;
+        }
     }
 }

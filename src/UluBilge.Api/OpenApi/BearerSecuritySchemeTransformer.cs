@@ -1,58 +1,67 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.OpenApi;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.OpenApi;
+using UluBilge.Api.Localization;
 
-namespace UluBilge.Api.OpenApi;
-
-internal sealed class BearerSecuritySchemeTransformer : IOpenApiDocumentTransformer, IOpenApiOperationTransformer
+namespace UluBilge.Api.OpenApi
 {
-    private const string SchemeName = "Bearer";
-
-    public Task TransformAsync(
-        OpenApiDocument document,
-        OpenApiDocumentTransformerContext context,
-        CancellationToken cancellationToken)
+    internal sealed class BearerSecuritySchemeTransformer : IOpenApiDocumentTransformer, IOpenApiOperationTransformer
     {
-        document.Components ??= new OpenApiComponents();
-        document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
-        document.Components.SecuritySchemes[SchemeName] = new OpenApiSecurityScheme
-        {
-            Type = SecuritySchemeType.Http,
-            Scheme = "bearer",
-            BearerFormat = "JWT",
-            Description = "Geçerli bir access token girin. Authorization başlığı, Bearer şemasını kullanır."
-        };
+        private const string SchemeName = "Bearer";
 
-        return Task.CompletedTask;
-    }
-
-    public Task TransformAsync(
-        OpenApiOperation operation,
-        OpenApiOperationTransformerContext context,
-        CancellationToken cancellationToken)
-    {
-        if (context.Description.ActionDescriptor.EndpointMetadata.OfType<IAllowAnonymous>().Any())
+        public Task TransformAsync(OpenApiDocument document, OpenApiDocumentTransformerContext context, CancellationToken cancellationToken)
         {
+            document.Components ??= new OpenApiComponents();
+            document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
+            document.Components.SecuritySchemes[SchemeName] = new OpenApiSecurityScheme
+            {
+                Type = SecuritySchemeType.Http,
+                Scheme = "bearer",
+                BearerFormat = "JWT",
+            Description = "Geçerli bir erişim belirteci girin. Authorization başlığında Bearer şeması kullanılır."
+            };
+
             return Task.CompletedTask;
         }
 
-        // The API's fallback policy requires authentication unless AllowAnonymous is present.
-        operation.Security ??= [];
-        operation.Security.Add(new OpenApiSecurityRequirement
+        public Task TransformAsync(OpenApiOperation operation, OpenApiOperationTransformerContext context, CancellationToken cancellationToken)
         {
-            [new OpenApiSecuritySchemeReference(SchemeName, context.Document)] = []
-        });
+        if (operation.Responses is not null)
+        {
+            foreach (var (status, response) in operation.Responses)
+            {
+                if (int.TryParse(status, out var statusCode) && response is OpenApiResponse description
+                    && description.Description == ReasonPhrases.GetReasonPhrase(statusCode))
+                {
+                    description.Description = TurkishApiMessages.GetStatusTitle(statusCode);
+                }
+            }
+        }
 
-        operation.Responses ??= new OpenApiResponses();
-        operation.Responses.TryAdd("401", new OpenApiResponse
-        {
-            Description = "Authentication is required or the access token is invalid or expired."
-        });
-        operation.Responses.TryAdd("403", new OpenApiResponse
-        {
-            Description = "The authenticated user does not have permission to access this resource."
-        });
+            if (context.Description.ActionDescriptor.EndpointMetadata.OfType<IAllowAnonymous>().Any())
+            {
+                return Task.CompletedTask;
+            }
 
-        return Task.CompletedTask;
+            // AllowAnonymous belirtilmedikçe API'nin varsayılan politikası kimlik doğrulama gerektirir.
+            operation.Security ??= [];
+            operation.Security.Add(new OpenApiSecurityRequirement
+            {
+                [new OpenApiSecuritySchemeReference(SchemeName, context.Document)] = []
+            });
+
+            operation.Responses ??= new OpenApiResponses();
+            operation.Responses.TryAdd("401", new OpenApiResponse
+            {
+            Description = "Kimlik doğrulaması gereklidir veya erişim belirteci geçersizdir ya da süresi dolmuştur."
+            });
+            operation.Responses.TryAdd("403", new OpenApiResponse
+            {
+            Description = "Kimliği doğrulanmış kullanıcının bu kaynağa erişim yetkisi yoktur."
+            });
+
+            return Task.CompletedTask;
+        }
     }
 }

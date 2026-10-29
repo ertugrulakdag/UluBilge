@@ -4,36 +4,37 @@ using UluBilge.Core.Models;
 using UluBilge.Core.Queries;
 using UluBilge.Data.Abstract;
 
-namespace UluBilge.App.Queries.RegionHandler;
-
-public static class GetRegionsAsync
+namespace UluBilge.App.Queries.RegionHandler
 {
-    public sealed class Query : IQuery<Result>
+    public static class GetRegionsAsync
     {
-        [Range(1, int.MaxValue, ErrorMessage = "Sayfa numarası en az 1 olmalıdır.")]
-        public int PageNumber { get; set; } = 1;
-
-        [Range(1, 100, ErrorMessage = "Sayfa boyutu 1 ile 100 arasında olmalıdır.")]
-        public int PageSize { get; set; } = 20;
-    }
-
-    public sealed class Result : PagedResult<Region>
-    {
-    }
-
-    public sealed class Handler(IRegionRepository regionRepository) : IAsyncQueryHandler<Query, Result>
-    {
-        public async Task<Result> HandleAsync(Query query, CancellationToken ct = default)
+        public sealed class Query : IQuery<Result>
         {
-            var regions = await regionRepository.GetAllPagingAsync(query.PageNumber, query.PageSize, ct);
+            [Range(1, int.MaxValue, ErrorMessage = "Sayfa numarası en az 1 olmalıdır.")]
+            public int PageNumber { get; set; } = 1;
 
-            return new Result
+            [Range(1, 100, ErrorMessage = "Sayfa boyutu 1 ile 100 arasında olmalıdır.")]
+            public int PageSize { get; set; } = 20;
+        }
+
+        public sealed class Result : PagedResult<Region>
+        {
+        }
+
+        public sealed class Handler(IRegionRepository regionRepository) : IAsyncQueryHandler<Query, Result>
+        {
+            public async Task<Result> HandleAsync(Query query, CancellationToken ct = default)
             {
-                Data = regions.Data,
-                Total = regions.Total,
-                PageNumber = regions.PageNumber,
-                PageSize = regions.PageSize
-            };
+                var regions = await regionRepository.GetAllPagingAsync(query.PageNumber, query.PageSize, ct);
+
+                return new Result
+                {
+                    Data = regions.Data,
+                    Total = regions.Total,
+                    PageNumber = regions.PageNumber,
+                    PageSize = regions.PageSize
+                };
+            }
         }
     }
 }

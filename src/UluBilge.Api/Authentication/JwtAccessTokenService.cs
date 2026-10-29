@@ -2,42 +2,47 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 
-namespace UluBilge.Api.Authentication;
-
-internal sealed class JwtAccessTokenService(
-    IOptions<JwtOptions> options,
-    JwtKeyMaterial keyMaterial,
-    TimeProvider timeProvider) : IAccessTokenService
+namespace UluBilge.Api.Authentication
 {
-    private readonly JsonWebTokenHandler _handler = new();
-
-    public AccessTokenResponse Create(AuthenticatedUser user)
+    internal sealed class JwtAccessTokenService(IOptions<JwtOptions> options, JwtKeyMaterial keyMaterial, TimeProvider timeProvider) : IAccessTokenService
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(user.Id);
-        ArgumentException.ThrowIfNullOrWhiteSpace(user.UserName);
+        private readonly JsonWebTokenHandler _handler = new();
 
-        var settings = options.Value;
-        var issuedAt = DateTimeOffset.FromUnixTimeSeconds(timeProvider.GetUtcNow().ToUnixTimeSeconds());
-        var expiresAt = issuedAt.AddMinutes(settings.AccessTokenLifetimeMinutes);
-        var token = _handler.CreateToken(new SecurityTokenDescriptor
+        public AccessTokenResponse Create(AuthenticatedUser user)
         {
-            Issuer = settings.Issuer,
-            Audience = settings.Audience,
-            IssuedAt = issuedAt.UtcDateTime,
-            NotBefore = issuedAt.UtcDateTime,
-            Expires = expiresAt.UtcDateTime,
-            TokenType = "at+jwt",
-            SigningCredentials = keyMaterial.SigningCredentials,
-            Claims = new Dictionary<string, object>
+            if (string.IsNullOrWhiteSpace(user.Id))
             {
-                [JwtRegisteredClaimNames.Sub] = user.Id,
-                [JwtRegisteredClaimNames.Name] = user.UserName,
-                [JwtRegisteredClaimNames.Jti] = Guid.NewGuid().ToString("N"),
-                ["role"] = user.Roles.ToArray(),
-                ["permission"] = user.Permissions.ToArray()
+                throw new ArgumentException("Erişim belirteci oluşturmak için kullanıcı kimliği zorunludur.");
             }
-        });
 
-        return new AccessTokenResponse(token, "Bearer", settings.AccessTokenLifetimeMinutes * 60, expiresAt);
+            if (string.IsNullOrWhiteSpace(user.UserName))
+            {
+                throw new ArgumentException("Erişim belirteci oluşturmak için kullanıcı adı zorunludur.");
+            }
+
+            var settings = options.Value;
+            var issuedAt = DateTimeOffset.FromUnixTimeSeconds(timeProvider.GetUtcNow().ToUnixTimeSeconds());
+            var expiresAt = issuedAt.AddMinutes(settings.AccessTokenLifetimeMinutes);
+            var token = _handler.CreateToken(new SecurityTokenDescriptor
+            {
+                Issuer = settings.Issuer,
+                Audience = settings.Audience,
+                IssuedAt = issuedAt.UtcDateTime,
+                NotBefore = issuedAt.UtcDateTime,
+                Expires = expiresAt.UtcDateTime,
+                TokenType = "at+jwt",
+                SigningCredentials = keyMaterial.SigningCredentials,
+                Claims = new Dictionary<string, object>
+                {
+                    [JwtRegisteredClaimNames.Sub] = user.Id,
+                    [JwtRegisteredClaimNames.Name] = user.UserName,
+                    [JwtRegisteredClaimNames.Jti] = Guid.NewGuid().ToString("N"),
+                    ["role"] = user.Roles.ToArray(),
+                    ["permission"] = user.Permissions.ToArray()
+                }
+            });
+
+            return new AccessTokenResponse(token, "Bearer", settings.AccessTokenLifetimeMinutes * 60, expiresAt);
+        }
     }
 }

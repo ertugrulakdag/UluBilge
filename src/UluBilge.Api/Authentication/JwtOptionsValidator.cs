@@ -1,46 +1,46 @@
 using Microsoft.Extensions.Options;
 
-namespace UluBilge.Api.Authentication;
-
-internal sealed class JwtOptionsValidator(IHostEnvironment environment) : IValidateOptions<JwtOptions>
+namespace UluBilge.Api.Authentication
 {
-    public ValidateOptionsResult Validate(string? name, JwtOptions options)
+    internal sealed class JwtOptionsValidator(IHostEnvironment environment) : IValidateOptions<JwtOptions>
     {
-        var errors = new List<string>();
-        if (string.IsNullOrWhiteSpace(options.Issuer) || options.Issuer.Length > 200)
+        public ValidateOptionsResult Validate(string? name, JwtOptions options)
         {
-            errors.Add("Jwt:Issuer must contain between 1 and 200 characters.");
-        }
-
-        if (string.IsNullOrWhiteSpace(options.Audience) || options.Audience.Length > 200)
-        {
-            errors.Add("Jwt:Audience must contain between 1 and 200 characters.");
-        }
-
-        if (options.AccessTokenLifetimeMinutes is < 1 or > 15)
-        {
-            errors.Add("Jwt:AccessTokenLifetimeMinutes must be between 1 and 15.");
-        }
-
-        if (options.SigningKeyBase64 is null)
-        {
-            if (!environment.IsDevelopment())
+            var errors = new List<string>();
+            if (string.IsNullOrWhiteSpace(options.Issuer) || options.Issuer.Length > 200)
             {
-                errors.Add("Jwt:SigningKeyBase64 must be supplied through a secret store outside Development.");
-            }
-        }
-        else
-        {
-            Span<byte> keyBuffer = stackalloc byte[128];
-            if (!Convert.TryFromBase64String(options.SigningKeyBase64, keyBuffer, out var bytesWritten)
-                || bytesWritten < 32)
-            {
-                errors.Add("Jwt:SigningKeyBase64 must encode 32 to 128 cryptographically random bytes.");
+                errors.Add("Jwt:Issuer alanı 1 ile 200 karakter arasında olmalıdır.");
             }
 
-            System.Security.Cryptography.CryptographicOperations.ZeroMemory(keyBuffer);
-        }
+            if (string.IsNullOrWhiteSpace(options.Audience) || options.Audience.Length > 200)
+            {
+                errors.Add("Jwt:Audience alanı 1 ile 200 karakter arasında olmalıdır.");
+            }
 
-        return errors.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(errors);
+            if (options.AccessTokenLifetimeMinutes is < 1 or > 15)
+            {
+                errors.Add("Jwt:AccessTokenLifetimeMinutes değeri 1 ile 15 dakika arasında olmalıdır.");
+            }
+
+            if (options.SigningKeyBase64 is null)
+            {
+                if (!environment.IsDevelopment())
+                {
+                    errors.Add("Development dışındaki ortamlarda Jwt:SigningKeyBase64 değeri güvenli bir gizli bilgi deposundan sağlanmalıdır.");
+                }
+            }
+            else
+            {
+                Span<byte> keyBuffer = stackalloc byte[128];
+                if (!Convert.TryFromBase64String(options.SigningKeyBase64, keyBuffer, out var bytesWritten) || bytesWritten < 32)
+                {
+                    errors.Add("Jwt:SigningKeyBase64 değeri, kriptografik olarak rastgele üretilmiş 32 ile 128 baytlık bir anahtarın Base64 karşılığı olmalıdır.");
+                }
+
+                System.Security.Cryptography.CryptographicOperations.ZeroMemory(keyBuffer);
+            }
+
+            return errors.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(errors);
+        }
     }
 }

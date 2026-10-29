@@ -73,7 +73,7 @@ namespace UluBilge.Migration
             var migrationsDir = Path.Combine(baseDir, "Migrations");
             if (!Directory.Exists(migrationsDir))
             {
-                WriteLine($"Migrations klasörü bulunamadı: {migrationsDir}", ConsoleColor.Red);
+                WriteLine($"Veritabanı geçiş dosyalarının bulunduğu klasör yok: {migrationsDir}", ConsoleColor.Red);
                 return 1;
             }
 

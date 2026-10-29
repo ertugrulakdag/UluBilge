@@ -1,14 +1,15 @@
-namespace UluBilge.Api.Authentication;
-
-internal sealed class UserAuthenticationStartupValidator(IServiceScopeFactory scopeFactory) : IHostedService
+namespace UluBilge.Api.Authentication
 {
-    public Task StartAsync(CancellationToken cancellationToken)
+    internal sealed class UserAuthenticationStartupValidator(IServiceScopeFactory scopeFactory) : IHostedService
     {
-        // Validate the final registration at startup, including replacements registered by the app.
-        using var scope = scopeFactory.CreateScope();
-        _ = scope.ServiceProvider.GetRequiredService<IUserAuthenticator>();
-        return Task.CompletedTask;
-    }
+        public Task StartAsync(CancellationToken cancellationToken)
+        {
+            // Uygulamanın değiştirdiği kayıtlar dahil, son kullanıcı doğrulama kaydını başlangıçta denetle.
+            using var scope = scopeFactory.CreateScope();
+            _ = scope.ServiceProvider.GetRequiredService<IUserAuthenticator>();
+            return Task.CompletedTask;
+        }
 
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    }
 }

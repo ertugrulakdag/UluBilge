@@ -13,7 +13,7 @@ namespace UluBilge.Api.Authentication
         {
             if (!environment.IsDevelopment())
             {
-                throw new InvalidOperationException("Development authentication is only available in the Development environment.");
+                throw new InvalidOperationException("Geliştirme amaçlı kullanıcı doğrulaması yalnızca Development ortamında kullanılabilir.");
             }
 
             _user = new AuthenticatedUser(
@@ -29,10 +29,7 @@ namespace UluBilge.Api.Authentication
             _passwordHash = _passwordHasher.HashPassword(_user, "admin");
         }
 
-        public Task<AuthenticatedUser?> AuthenticateAsync(
-            string userName,
-            string password,
-            CancellationToken cancellationToken = default)
+        public Task<AuthenticatedUser?> AuthenticateAsync(string userName, string password, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 

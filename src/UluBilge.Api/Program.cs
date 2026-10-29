@@ -1,18 +1,22 @@
 using Scalar.AspNetCore;
 using UluBilge.Api.Authentication;
 using UluBilge.Api.Exceptions;
+using UluBilge.Api.Localization;
 using UluBilge.Api.OpenApi;
 using UluBilge.App;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers();
+builder.Services.AddControllers(TurkishApiMessages.ConfigureMvc)
+    .AddJsonOptions(options => options.AllowInputFormatterExceptionMessages = false)
+    .ConfigureApiBehaviorOptions(TurkishApiMessages.ConfigureApiBehavior);
 builder.Services.AddOpenApi(options =>
 {
     options.AddDocumentTransformer<BearerSecuritySchemeTransformer>();
     options.AddOperationTransformer<BearerSecuritySchemeTransformer>();
 });
-builder.Services.AddProblemDetails();
+builder.Services.AddProblemDetails(options =>
+    options.CustomizeProblemDetails = TurkishApiMessages.CustomizeProblemDetails);
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddApplication(builder.Configuration);
 builder.Services.AddApiAuthentication(builder.Configuration, builder.Environment);
@@ -20,6 +24,10 @@ builder.Services.AddApiAuthentication(builder.Configuration, builder.Environment
 var app = builder.Build();
 
 app.UseExceptionHandler();
+app.UseStatusCodePages(context => Results.Problem(
+    statusCode: context.HttpContext.Response.StatusCode,
+    title: TurkishApiMessages.GetStatusTitle(context.HttpContext.Response.StatusCode))
+    .ExecuteAsync(context.HttpContext));
 
 if (!app.Environment.IsDevelopment())
 {
