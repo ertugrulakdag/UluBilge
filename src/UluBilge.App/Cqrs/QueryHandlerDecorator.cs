@@ -4,7 +4,7 @@ using UluBilge.Data.Abstract;
 
 namespace UluBilge.App.Cqrs
 {
-    internal sealed class QueryHandlerDecorator<TQuery, TResult>(IAsyncQueryHandler<TQuery, TResult> handler, IUnitOfWork unitOfWork) : IAsyncQueryHandler<TQuery, TResult> where TQuery : class, IQuery<TResult>
+    public sealed class QueryHandlerDecorator<TQuery, TResult>(IAsyncQueryHandler<TQuery, TResult> handler, IUnitOfWork unitOfWork) : IAsyncQueryHandler<TQuery, TResult> where TQuery : class, IQuery<TResult>
     {
         public Task<TResult> HandleAsync(TQuery query, CancellationToken ct = default)
         {

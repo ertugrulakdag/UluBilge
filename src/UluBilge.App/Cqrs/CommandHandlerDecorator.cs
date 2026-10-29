@@ -4,7 +4,7 @@ using UluBilge.Data.Abstract;
 
 namespace UluBilge.App.Cqrs
 {
-    internal sealed class CommandHandlerDecorator<TCommand, TResult>(IAsyncCommandHandler<TCommand, TResult> handler, IUnitOfWork unitOfWork) : IAsyncCommandHandler<TCommand, TResult> where TCommand : class, ICommand<TResult>
+    public sealed class CommandHandlerDecorator<TCommand, TResult>(IAsyncCommandHandler<TCommand, TResult> handler, IUnitOfWork unitOfWork) : IAsyncCommandHandler<TCommand, TResult> where TCommand : class, ICommand<TResult>
     {
         public Task<TResult> HandleAsync(TCommand command, CancellationToken ct = default)
         {

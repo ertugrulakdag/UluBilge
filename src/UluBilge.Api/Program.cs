@@ -3,7 +3,11 @@ using UluBilge.Api.Authentication;
 using UluBilge.Api.Exceptions;
 using UluBilge.Api.Localization;
 using UluBilge.Api.OpenApi;
-using UluBilge.App;
+using UluBilge.App.Cqrs;
+using UluBilge.Core.Commands;
+using UluBilge.Core.Queries;
+using UluBilge.Data.Abstract;
+using UluBilge.Data.Database;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -18,7 +22,24 @@ builder.Services.AddOpenApi(options =>
 builder.Services.AddProblemDetails(options =>
     options.CustomizeProblemDetails = TurkishApiMessages.CustomizeProblemDetails);
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
-builder.Services.AddApplication(builder.Configuration);
+builder.Services.AddSingleton(new DatabaseConnectionSettings(builder.Configuration));
+builder.Services.Scan(scan => scan
+    .FromAssemblies(typeof(CommandHandlerDecorator<,>).Assembly)
+    .AddClasses(classes => classes
+        .AssignableToAny(typeof(IAsyncCommandHandler<,>), typeof(IAsyncQueryHandler<,>))
+        .Where(type => !type.ContainsGenericParameters))
+    .AsImplementedInterfaces()
+    .WithScopedLifetime());
+builder.Services.Scan(scan => scan
+    .FromAssemblyOf<UnitOfWork>()
+    .AddClasses(classes => classes.InNamespaces("UluBilge.Data.Repository"))
+    .AsImplementedInterfaces()
+    .WithScopedLifetime()
+    .AddClasses(classes => classes.AssignableTo<IUnitOfWork>())
+    .As<IUnitOfWork>()
+    .WithScopedLifetime());
+builder.Services.Decorate(typeof(IAsyncCommandHandler<,>), typeof(CommandHandlerDecorator<,>));
+builder.Services.Decorate(typeof(IAsyncQueryHandler<,>), typeof(QueryHandlerDecorator<,>));
 builder.Services.AddApiAuthentication(builder.Configuration, builder.Environment);
 
 var app = builder.Build();
