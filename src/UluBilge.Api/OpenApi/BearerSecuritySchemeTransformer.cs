@@ -19,7 +19,7 @@ namespace UluBilge.Api.OpenApi
                 Type = SecuritySchemeType.Http,
                 Scheme = "bearer",
                 BearerFormat = "JWT",
-            Description = "Geçerli bir erişim belirteci girin. Authorization başlığında Bearer şeması kullanılır."
+                //Description = "Geçerli bir erişim belirteci girin. Authorization başlığında Bearer şeması kullanılır."
             };
 
             return Task.CompletedTask;
@@ -27,17 +27,16 @@ namespace UluBilge.Api.OpenApi
 
         public Task TransformAsync(OpenApiOperation operation, OpenApiOperationTransformerContext context, CancellationToken cancellationToken)
         {
-        if (operation.Responses is not null)
-        {
-            foreach (var (status, response) in operation.Responses)
+            if (operation.Responses is not null)
             {
-                if (int.TryParse(status, out var statusCode) && response is OpenApiResponse description
-                    && description.Description == ReasonPhrases.GetReasonPhrase(statusCode))
+                foreach (var (status, response) in operation.Responses)
                 {
-                    description.Description = TurkishApiMessages.GetStatusTitle(statusCode);
+                    if (int.TryParse(status, out var statusCode) && response is OpenApiResponse description && description.Description == ReasonPhrases.GetReasonPhrase(statusCode))
+                    {
+                        description.Description = TurkishApiMessages.GetStatusTitle(statusCode);
+                    }
                 }
             }
-        }
 
             if (context.Description.ActionDescriptor.EndpointMetadata.OfType<IAllowAnonymous>().Any())
             {
@@ -54,11 +53,11 @@ namespace UluBilge.Api.OpenApi
             operation.Responses ??= new OpenApiResponses();
             operation.Responses.TryAdd("401", new OpenApiResponse
             {
-            Description = "Kimlik doğrulaması gereklidir veya erişim belirteci geçersizdir ya da süresi dolmuştur."
+                Description = "Kimlik doğrulaması gereklidir veya erişim belirteci geçersizdir ya da süresi dolmuştur."
             });
             operation.Responses.TryAdd("403", new OpenApiResponse
             {
-            Description = "Kimliği doğrulanmış kullanıcının bu kaynağa erişim yetkisi yoktur."
+                Description = "Kimliği doğrulanmış kullanıcının bu kaynağa erişim yetkisi yoktur."
             });
 
             return Task.CompletedTask;

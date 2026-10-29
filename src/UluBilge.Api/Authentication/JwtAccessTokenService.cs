@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
@@ -8,9 +9,9 @@ namespace UluBilge.Api.Authentication
     {
         private readonly JsonWebTokenHandler _handler = new();
 
-        public AccessTokenResponse Create(AuthenticatedUser user)
+        public AccessTokenResponse Create(AuthenticatedUser user, Guid securityStamp, Guid familyId)
         {
-            if (string.IsNullOrWhiteSpace(user.Id))
+            if (user.Id <= 0)
             {
                 throw new ArgumentException("Erişim belirteci oluşturmak için kullanıcı kimliği zorunludur.");
             }
@@ -18,6 +19,11 @@ namespace UluBilge.Api.Authentication
             if (string.IsNullOrWhiteSpace(user.UserName))
             {
                 throw new ArgumentException("Erişim belirteci oluşturmak için kullanıcı adı zorunludur.");
+            }
+
+            if (!AuthenticationClaims.IsSupportedRole(user.RoleEnum) || securityStamp == Guid.Empty || familyId == Guid.Empty)
+            {
+                throw new ArgumentException("Erişim belirteci oluşturmak için geçerli rol ve oturum bilgileri zorunludur.");
             }
 
             var settings = options.Value;
@@ -34,11 +40,12 @@ namespace UluBilge.Api.Authentication
                 SigningCredentials = keyMaterial.SigningCredentials,
                 Claims = new Dictionary<string, object>
                 {
-                    [JwtRegisteredClaimNames.Sub] = user.Id,
+                    [JwtRegisteredClaimNames.Sub] = user.Id.ToString(CultureInfo.InvariantCulture),
                     [JwtRegisteredClaimNames.Name] = user.UserName,
                     [JwtRegisteredClaimNames.Jti] = Guid.NewGuid().ToString("N"),
-                    ["role"] = user.Roles.ToArray(),
-                    ["permission"] = user.Permissions.ToArray()
+                    [AuthenticationClaims.RoleEnum] = (long)user.RoleEnum,
+                    [AuthenticationClaims.SecurityStamp] = securityStamp.ToString("D"),
+                    [AuthenticationClaims.SessionId] = familyId.ToString("D")
                 }
             });
 

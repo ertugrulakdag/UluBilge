@@ -1,17 +1,17 @@
 using System.ComponentModel.DataAnnotations;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using UluBilge.Api.Authentication;
 using UluBilge.Api.Models;
 using UluBilge.App.Commands.RegionHandler;
 using UluBilge.App.Queries.RegionHandler;
+using UluBilge.Core.Enums;
 
 namespace UluBilge.Api.Controllers
 {
+    [RoleAuthorize(RoleEnum.Admin)]//TODO:Birden fazla rol alabilmeli. Örn: Admin,User
     public sealed class RegionController : BaseController
     {
         [HttpGet("{id:int}")]
-        [Authorize(Policy = AuthorizationPolicies.ReadRegions)]
         public async Task<ActionResult<BaseResponse<GetRegionAsync.Result>>> GetRegionAsync(int id, CancellationToken ct)
         {
             var result = await AsyncQueryHandler<GetRegionAsync.Query, GetRegionAsync.Result>().HandleAsync(new GetRegionAsync.Query { RegionId = id }, ct);
@@ -19,7 +19,6 @@ namespace UluBilge.Api.Controllers
         }
 
         [HttpGet]
-        [Authorize(Policy = AuthorizationPolicies.ReadRegions)]
         public async Task<ActionResult<BaseResponse<GetRegionsAsync.Result>>> GetRegionsAsync([FromQuery] GetRegionsAsync.Query query, CancellationToken ct)
         {
             var result = await AsyncQueryHandler<GetRegionsAsync.Query, GetRegionsAsync.Result>().HandleAsync(query, ct);
@@ -27,7 +26,6 @@ namespace UluBilge.Api.Controllers
         }
 
         [HttpPost]
-        [Authorize(Policy = AuthorizationPolicies.WriteRegions)]
         public async Task<ActionResult<BaseResponse<AddRegionAsync.Result>>> AddAsync(
             [FromBody, Required(ErrorMessage = "İstek gövdesi zorunludur.")] AddRegionAsync.Command command,
             CancellationToken ct)
@@ -37,7 +35,6 @@ namespace UluBilge.Api.Controllers
         }
 
         [HttpPut]
-        [Authorize(Policy = AuthorizationPolicies.WriteRegions)]
         public async Task<ActionResult<BaseResponse<UpdateRegionAsync.Result>>> UpdateAsync(
             [FromBody, Required(ErrorMessage = "İstek gövdesi zorunludur.")] UpdateRegionAsync.Command command,
             CancellationToken ct)
@@ -47,7 +44,6 @@ namespace UluBilge.Api.Controllers
         }
 
         [HttpDelete("{id:int}")]
-        [Authorize(Policy = AuthorizationPolicies.WriteRegions)]
         public async Task<ActionResult<BaseResponse<DeleteRegionAsync.Result>>> DeleteAsync(int id, CancellationToken ct)
         {
             var result = await AsyncCommandHandler<DeleteRegionAsync.Command, DeleteRegionAsync.Result>().HandleAsync(new DeleteRegionAsync.Command { RegionId = id }, ct);

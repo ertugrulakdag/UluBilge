@@ -16,16 +16,9 @@ namespace UluBilge.Api.Extentions
     {
         public static IServiceCollection AddApiAuthentication(this IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
         {
-            services.TryAddSingleton<IUserAuthenticator>(provider =>
-            {
-                if (!environment.IsDevelopment())
-                {
-                    throw new InvalidOperationException("Development dışındaki ortamlarda AddApiAuthentication çağrısından önce veritabanı kullanan bir IUserAuthenticator uygulaması kaydedilmelidir. admin/admin deneme kullanıcısı bu ortamda kullanılamaz.");
-                }
-
-                return ActivatorUtilities.CreateInstance<DevelopmentUserAuthenticator>(provider);
-            });
-            services.AddHostedService<UserAuthenticationStartupValidator>();
+            services.AddScoped<IUserAuthenticationService, DatabaseUserAuthenticationService>();
+            services.AddSingleton<UserPasswordService>();
+            services.AddSingleton<IAuthorizationHandler, RoleAuthorizationHandler>();
 
             services.AddOptions<JwtOptions>()
                 .Bind(configuration.GetSection(JwtOptions.SectionName))
@@ -62,18 +55,17 @@ namespace UluBilge.Api.Extentions
                         ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
                         ValidTypes = ["at+jwt"],
                         NameClaimType = "name",
-                        RoleClaimType = "role",
+                        RoleClaimType = AuthenticationClaims.RoleEnum,
                         LogValidationExceptions = false,
                         IncludeTokenOnFailedValidation = false
                     };
                     bearer.Events = new JwtBearerEvents
                     {
-                        OnTokenValidated = context =>
+                        OnTokenValidated = async context =>
                         {
                             var now = context.HttpContext.RequestServices.GetRequiredService<TimeProvider>()
                                 .GetUtcNow().ToUnixTimeSeconds();
-                            if (!HasSingleValue(context.Principal, "sub")
-                                || !HasSingleValue(context.Principal, "name")
+                            if (!AuthenticationClaims.TryGetSession(context.Principal, out var session)
                                 || !HasSingleValue(context.Principal, "jti")
                                 || context.SecurityToken is not JsonWebToken token
                                 || !token.TryGetPayloadValue<long>("iat", out var issuedAt)
@@ -86,9 +78,14 @@ namespace UluBilge.Api.Extentions
                                 || expiresAt - issuedAt > settings.AccessTokenLifetimeMinutes * 60L)
                             {
                                 context.Fail("Geçersiz erişim belirteci.");
+                                return;
                             }
 
-                            return Task.CompletedTask;
+                            var authentication = context.HttpContext.RequestServices.GetRequiredService<IUserAuthenticationService>();
+                            if (!await authentication.IsSessionValidAsync(session, context.HttpContext.RequestAborted))
+                            {
+                                context.Fail("Oturum artık geçerli değil.");
+                            }
                         },
                         OnChallenge = async context =>
                         {
@@ -113,8 +110,6 @@ namespace UluBilge.Api.Extentions
             services.AddAuthorization(options =>
             {
                 options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build();
-                options.AddPolicy(AuthorizationPolicies.ReadRegions, policy => policy.RequireAuthenticatedUser().RequireClaim("permission", AuthorizationPolicies.ReadRegions));
-                options.AddPolicy(AuthorizationPolicies.WriteRegions, policy => policy.RequireAuthenticatedUser().RequireClaim("permission", AuthorizationPolicies.WriteRegions));
             });
 
             services.AddRateLimiter(options =>
@@ -129,6 +124,13 @@ namespace UluBilge.Api.Extentions
                         QueueLimit = 0,
                         AutoReplenishment = true
                     }));
+                options.AddFixedWindowLimiter("auth-refresh", limiter =>
+                {
+                    limiter.PermitLimit = 60;
+                    limiter.Window = TimeSpan.FromMinutes(1);
+                    limiter.QueueLimit = 0;
+                    limiter.AutoReplenishment = true;
+                });
                 // Farklı IP adreslerinden gelen toplam giriş denemelerini de sınırla; yönlendirme başlıklarına kendiliğinden güvenme.
                 options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
                     context.GetEndpoint()?.Metadata.GetMetadata<EnableRateLimitingAttribute>()?.PolicyName == "auth-login"

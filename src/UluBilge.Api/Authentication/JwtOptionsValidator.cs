@@ -22,6 +22,11 @@ namespace UluBilge.Api.Authentication
                 errors.Add("Jwt:AccessTokenLifetimeMinutes değeri 1 ile 15 dakika arasında olmalıdır.");
             }
 
+            if (options.RefreshTokenLifetimeDays is < 1 or > 30)
+            {
+                errors.Add("Jwt:RefreshTokenLifetimeDays değeri 1 ile 30 gün arasında olmalıdır.");
+            }
+
             if (options.SigningKeyBase64 is null)
             {
                 if (!environment.IsDevelopment())

@@ -8,7 +8,7 @@ namespace UluBilge.Api.Controllers
 {
     [ApiController]
     [Route("v1/Auth")]
-    public sealed class AuthController(IUserAuthenticator userAuthenticator, IAccessTokenService accessTokenService) : ControllerBase
+    public sealed class AuthController(IUserAuthenticationService authentication) : ControllerBase
     {
         [HttpPost("login")]
         [AllowAnonymous]
@@ -16,18 +16,18 @@ namespace UluBilge.Api.Controllers
         [RequestSizeLimit(4096)]
         [Consumes("application/json")]
         [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-        [ProducesResponseType<AccessTokenResponse>(StatusCodes.Status200OK)]
+        [ProducesResponseType<TokenResponse>(StatusCodes.Status200OK)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
-        public async Task<ActionResult<AccessTokenResponse>> Login([FromBody, Required(ErrorMessage = "İstek gövdesi zorunludur.")] LoginRequest request, CancellationToken cancellationToken)
+        public async Task<ActionResult<TokenResponse>> Login([FromBody, Required(ErrorMessage = "İstek gövdesi zorunludur.")] LoginRequest request, CancellationToken cancellationToken)
         {
             SetNoStoreHeaders();
 
-            var user = await userAuthenticator.AuthenticateAsync(
+            var tokens = await authentication.LoginAsync(
                 request.UserName,
                 request.Password,
                 cancellationToken);
 
-            if (user is null)
+            if (tokens is null)
             {
                 Response.Headers.WWWAuthenticate = "Bearer";
                 return Problem(
@@ -36,7 +36,45 @@ namespace UluBilge.Api.Controllers
                     detail: "Kullanıcı adı veya parola geçersiz.");
             }
 
-            return Ok(accessTokenService.Create(user));
+            return Ok(tokens);
+        }
+
+        [HttpPost("refresh")]
+        [AllowAnonymous]
+        [EnableRateLimiting("auth-refresh")]
+        [RequestSizeLimit(4096)]
+        [Consumes("application/json")]
+        [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+        [ProducesResponseType<TokenResponse>(StatusCodes.Status200OK)]
+        [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+        public async Task<ActionResult<TokenResponse>> Refresh([FromBody, Required(ErrorMessage = "İstek gövdesi zorunludur.")] RefreshRequest request, CancellationToken cancellationToken)
+        {
+            SetNoStoreHeaders();
+            var tokens = await authentication.RefreshAsync(request.RefreshToken, cancellationToken);
+            if (tokens is null)
+            {
+                Response.Headers.WWWAuthenticate = "Bearer";
+                return Problem(statusCode: StatusCodes.Status401Unauthorized,
+                    title: "Oturum yenilenemedi", detail: "Yenileme belirteci geçersiz veya süresi dolmuş.");
+            }
+
+            return Ok(tokens);
+        }
+
+        [HttpPost("logout")]
+        [Authorize]
+        [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        public async Task<IActionResult> Logout(CancellationToken cancellationToken)
+        {
+            SetNoStoreHeaders();
+            if (!AuthenticationClaims.TryGetSession(User, out var session))
+            {
+                return Challenge();
+            }
+
+            await authentication.LogoutAsync(session, cancellationToken);
+            return NoContent();
         }
 
         [HttpGet("me")]
@@ -48,18 +86,12 @@ namespace UluBilge.Api.Controllers
         {
             SetNoStoreHeaders();
 
-            var subject = User.FindFirst("sub")?.Value;
-            var userName = User.FindFirst("name")?.Value;
-            if (string.IsNullOrWhiteSpace(subject) || string.IsNullOrWhiteSpace(userName))
+            if (!AuthenticationClaims.TryGetSession(User, out var session))
             {
                 return Challenge();
             }
 
-            return Ok(new AuthenticatedUser(
-                subject,
-                userName,
-                User.FindAll("role").Select(claim => claim.Value).Distinct(StringComparer.Ordinal).ToArray(),
-                User.FindAll("permission").Select(claim => claim.Value).Distinct(StringComparer.Ordinal).ToArray()));
+            return Ok(session.User);
         }
 
         private void SetNoStoreHeaders()
@@ -77,6 +109,13 @@ namespace UluBilge.Api.Controllers
             [Required(ErrorMessage = "Parola zorunludur.")]
             [StringLength(128, ErrorMessage = "Parola en fazla 128 karakter olabilir.")]
             public string Password { get; init; } = string.Empty;
+        }
+
+        public sealed class RefreshRequest
+        {
+            [Required(ErrorMessage = "Yenileme belirteci zorunludur.")]
+            [StringLength(43, MinimumLength = 43, ErrorMessage = "Yenileme belirteci 43 karakter olmalıdır.")]
+            public string RefreshToken { get; init; } = string.Empty;
         }
     }
 }
