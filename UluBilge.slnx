@@ -4,4 +4,5 @@
   <Project Path="src/UluBilge.Core/UluBilge.Core.csproj" />
   <Project Path="src/UluBilge.Data/UluBilge.Data.csproj" />
   <Project Path="src/UluBilge.Migration/UluBilge.Migration.csproj" />
+  <Project Path="test/UluBilge.Api.Tests/UluBilge.Api.Tests.csproj" />
 </Solution>

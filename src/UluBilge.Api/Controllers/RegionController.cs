@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using UluBilge.Api.Authentication;
 using UluBilge.Api.Models;
 using UluBilge.App.Commands.RegionHandler;
 using UluBilge.App.Queries.RegionHandler;
@@ -8,6 +10,7 @@ namespace UluBilge.Api.Controllers;
 public sealed class RegionController : BaseController
 {
     [HttpGet("{id:int}")]
+    [Authorize(Policy = AuthorizationPolicies.ReadRegions)]
     public async Task<ActionResult<BaseResponse<GetRegionAsync.Result>>> GetRegionAsync(int id, CancellationToken ct)
     {
         var result = await AsyncQueryHandler<GetRegionAsync.Query, GetRegionAsync.Result>().HandleAsync(new GetRegionAsync.Query { RegionId = id }, ct);
@@ -15,6 +18,7 @@ public sealed class RegionController : BaseController
     }
 
     [HttpGet]
+    [Authorize(Policy = AuthorizationPolicies.ReadRegions)]
     public async Task<ActionResult<BaseResponse<GetRegionsAsync.Result>>> GetRegionsAsync(
         [FromQuery] GetRegionsAsync.Query query, CancellationToken ct)
     {
@@ -23,6 +27,7 @@ public sealed class RegionController : BaseController
     }
 
     [HttpPost]
+    [Authorize(Policy = AuthorizationPolicies.WriteRegions)]
     public async Task<ActionResult<BaseResponse<AddRegionAsync.Result>>> AddAsync([FromBody] AddRegionAsync.Command command, CancellationToken ct)
     {
         var result = await AsyncCommandHandler<AddRegionAsync.Command, AddRegionAsync.Result>().HandleAsync(command, ct);
@@ -30,6 +35,7 @@ public sealed class RegionController : BaseController
     }
 
     [HttpPut]
+    [Authorize(Policy = AuthorizationPolicies.WriteRegions)]
     public async Task<ActionResult<BaseResponse<UpdateRegionAsync.Result>>> UpdateAsync([FromBody] UpdateRegionAsync.Command command, CancellationToken ct)
     {
         var result = await AsyncCommandHandler<UpdateRegionAsync.Command, UpdateRegionAsync.Result>().HandleAsync(command, ct);
@@ -37,6 +43,7 @@ public sealed class RegionController : BaseController
     }
 
     [HttpDelete("{id:int}")]
+    [Authorize(Policy = AuthorizationPolicies.WriteRegions)]
     public async Task<ActionResult<BaseResponse<DeleteRegionAsync.Result>>> DeleteAsync(int id, CancellationToken ct)
     {
         var result = await AsyncCommandHandler<DeleteRegionAsync.Command, DeleteRegionAsync.Result>().HandleAsync(new DeleteRegionAsync.Command { RegionId = id }, ct);

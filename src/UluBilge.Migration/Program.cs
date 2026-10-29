@@ -45,12 +45,9 @@ namespace UluBilge.Migration
 
             var baseDir = AppContext.BaseDirectory;
 
-            var environment = AskEnvironment();
-
             var configuration = new ConfigurationBuilder()
                 .SetBasePath(baseDir)
                 .AddJsonFile("appsettings.json", optional: false)
-                .AddJsonFile($"appsettings.{environment}.json", optional: true)
                 .Build();
 
             var projectName = configuration["ProjectName"] ?? "UluBilge";
@@ -62,26 +59,13 @@ namespace UluBilge.Migration
             }
 
             var connectionInfo = new SqlConnectionStringBuilder(connectionString);
-            var environmentName = environment switch
-            {
-                "Development" => "Geliştirme",
-                "Production" => "Üretim",
-                _ => environment
-            };
-            var environmentColor = environment switch
-            {
-                "Production" => ConsoleColor.Red,
-                "Test" => ConsoleColor.Yellow,
-                _ => ConsoleColor.Green
-            };
 
-            Console.Title = $"Veritabanı Geçiş Aracı - {projectName} ({environmentName})";
+            Console.Title = $"Veritabanı Geçiş Aracı - {projectName}";
 
             Console.WriteLine();
-            PrintBanner($"ÇALIŞILAN PROJE: {projectName}", environmentColor);
+            PrintBanner($"ÇALIŞILAN PROJE: {projectName}", ConsoleColor.Green);
             Console.WriteLine();
             WriteLine($"Proje       : {projectName}", ConsoleColor.Cyan);
-            WriteLine($"Ortam       : {environmentName}", ConsoleColor.Cyan);
             WriteLine($"Sunucu      : {connectionInfo.DataSource}", ConsoleColor.Cyan);
             WriteLine($"Veritabanı  : {connectionInfo.InitialCatalog}", ConsoleColor.Cyan);
             Console.WriteLine();
@@ -210,27 +194,6 @@ namespace UluBilge.Migration
             totalStopwatch.Stop();
             PrintSummary(appliedCount, skippedCount, files.Count, totalStopwatch.ElapsedMilliseconds, failed: false);
             return 0;
-        }
-
-        private static string AskEnvironment()
-        {
-            Console.WriteLine("Hangi ortamda çalıştırılsın?");
-            Console.WriteLine(" 1) Geliştirme (varsayılan)");
-            Console.WriteLine(" 2) Test");
-            Console.WriteLine(" 3) Üretim");
-            Console.Write("Seçiminiz [1]: ");
-            var input = Console.ReadLine()?.Trim();
-
-            return input switch
-            {
-                null or "" or "1" => "Development",
-                "2" => "Test",
-                "3" => "Production",
-                _ when input.Equals("Development", StringComparison.OrdinalIgnoreCase) => "Development",
-                _ when input.Equals("Test", StringComparison.OrdinalIgnoreCase) => "Test",
-                _ when input.Equals("Production", StringComparison.OrdinalIgnoreCase) => "Production",
-                _ => "Development"
-            };
         }
 
         private static async Task EnsureHistoryTableSchemaAsync(SqlConnection connection)
