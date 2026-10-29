@@ -1,3 +1,4 @@
+using Scalar.AspNetCore;
 using UluBilge.Api.Exceptions;
 using UluBilge.App;
 
@@ -16,6 +17,7 @@ app.UseExceptionHandler();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    app.MapScalarApiReference("/docs", options => options.WithTitle("UluBilge API"));
 }
 
 app.UseHttpsRedirection();

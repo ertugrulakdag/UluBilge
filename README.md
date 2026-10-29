@@ -57,7 +57,10 @@ dotnet run --project src/UluBilge.Api --launch-profile http
 ```
 
 HTTP adresi `http://localhost:5156`, HTTPS profili `https://localhost:7187`.
-Development ortamında OpenAPI belgesi `/openapi/v1.json` adresindedir.
+Development ortamında Scalar API dokümantasyonuna `http://localhost:5156/docs`
+veya HTTPS profiliyle `https://localhost:7187/docs` adresinden ulaşılabilir.
+OpenAPI belgesi `/openapi/v1.json` adresindedir. Bu iki uç nokta yalnızca
+Development ortamında açıktır.
 
 Northwind henüz kurulu değilse hedef veritabanını oluşturduktan sonra migration
 uygulaması elle çalıştırılabilir:
