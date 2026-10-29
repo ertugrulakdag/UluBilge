@@ -185,7 +185,11 @@ dotnet test UluBilge.slnx
 
 Entity'yi Core'a, repository arayüzünü `Data/Abstract` içine ve uygulamasını
 `Data/Repository` içine ekleyin. App içinde `Commands/<Özellik>Handler` veya
-`Queries/<Özellik>Handler` altında istek, sonuç ve handler tanımlayın. Handler'ı
-App `DependencyInjection` dosyasındaki `AddCommandHandler`/`AddQueryHandler`
-yardımcısıyla kaydedin; böylece doğrulama, bağlantı seçimi ve transaction otomatik
-uygulanır. Repository kaydını Data `DependencyInjection` dosyasına ekleyin.
+`Queries/<Özellik>Handler` altında istek, sonuç ve handler tanımlayın.
+App assembly'sinde `IAsyncCommandHandler<,>` veya `IAsyncQueryHandler<,>` uygulayan
+public handler'lar ile `UluBilge.Data.Repository` namespace'i altındaki public
+repository'ler otomatik kaydedilir. Doğrulama, bağlantı seçimi ve transaction
+decorator'larla uygulanır. Kayıt kuralları API projesindeki
+`Extentions/ApplicationServiceCollectionExtensions.cs` dosyasındadır; `Program.cs`
+içinden `AddUluBilgeServices` ile çağrılır. JWT yapılandırması aynı klasördeki
+`JwtServiceCollectionExtensions.cs` üzerinden `AddApiAuthentication` ile yapılır.

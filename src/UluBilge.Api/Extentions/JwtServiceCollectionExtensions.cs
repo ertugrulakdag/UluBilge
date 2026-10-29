@@ -8,10 +8,11 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
+using UluBilge.Api.Authentication;
 
-namespace UluBilge.Api.Authentication
+namespace UluBilge.Api.Extentions
 {
-    public static class AuthenticationServiceCollectionExtensions
+    public static class JwtServiceCollectionExtensions
     {
         public static IServiceCollection AddApiAuthentication(this IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
         {
@@ -19,7 +20,7 @@ namespace UluBilge.Api.Authentication
             {
                 if (!environment.IsDevelopment())
                 {
-                throw new InvalidOperationException("Development dışındaki ortamlarda AddApiAuthentication çağrısından önce veritabanı kullanan bir IUserAuthenticator uygulaması kaydedilmelidir. admin/admin deneme kullanıcısı bu ortamda kullanılamaz.");
+                    throw new InvalidOperationException("Development dışındaki ortamlarda AddApiAuthentication çağrısından önce veritabanı kullanan bir IUserAuthenticator uygulaması kaydedilmelidir. admin/admin deneme kullanıcısı bu ortamda kullanılamaz.");
                 }
 
                 return ActivatorUtilities.CreateInstance<DevelopmentUserAuthenticator>(provider);
@@ -84,7 +85,7 @@ namespace UluBilge.Api.Authentication
                                 || expiresAt <= issuedAt
                                 || expiresAt - issuedAt > settings.AccessTokenLifetimeMinutes * 60L)
                             {
-                            context.Fail("Geçersiz erişim belirteci.");
+                                context.Fail("Geçersiz erişim belirteci.");
                             }
 
                             return Task.CompletedTask;
@@ -96,7 +97,7 @@ namespace UluBilge.Api.Authentication
                             context.Response.Headers.CacheControl = "no-store";
                             await Results.Problem(statusCode: StatusCodes.Status401Unauthorized,
                                 title: "Kimlik doğrulama gerekli",
-                            detail: "Bearer şemasıyla geçerli bir erişim belirteci gönderin.").ExecuteAsync(context.HttpContext);
+                                detail: "Bearer şemasıyla geçerli bir erişim belirteci gönderin.").ExecuteAsync(context.HttpContext);
                         },
                         OnForbidden = context =>
                         {
