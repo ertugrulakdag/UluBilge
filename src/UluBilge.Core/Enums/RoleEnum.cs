@@ -3,7 +3,7 @@
 namespace UluBilge.Core.Enums
 {
     [Flags]
-    public enum RoleEnum
+    public enum RoleEnum : long
     {
         [Description("Yok")]
         None = 0,
