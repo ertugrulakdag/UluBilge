@@ -18,9 +18,7 @@ namespace UluBilge.Api.Controllers
         [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
         [ProducesResponseType<AccessTokenResponse>(StatusCodes.Status200OK)]
         [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
-    public async Task<ActionResult<AccessTokenResponse>> Login(
-        [FromBody, Required(ErrorMessage = "İstek gövdesi zorunludur.")] LoginRequest request,
-        CancellationToken cancellationToken)
+        public async Task<ActionResult<AccessTokenResponse>> Login([FromBody, Required(ErrorMessage = "İstek gövdesi zorunludur.")] LoginRequest request, CancellationToken cancellationToken)
         {
             SetNoStoreHeaders();
 
@@ -72,12 +70,12 @@ namespace UluBilge.Api.Controllers
 
         public sealed class LoginRequest
         {
-        [Required(ErrorMessage = "Kullanıcı adı zorunludur.")]
-        [StringLength(64, ErrorMessage = "Kullanıcı adı en fazla 64 karakter olabilir.")]
+            [Required(ErrorMessage = "Kullanıcı adı zorunludur.")]
+            [StringLength(64, ErrorMessage = "Kullanıcı adı en fazla 64 karakter olabilir.")]
             public string UserName { get; init; } = string.Empty;
 
-        [Required(ErrorMessage = "Parola zorunludur.")]
-        [StringLength(128, ErrorMessage = "Parola en fazla 128 karakter olabilir.")]
+            [Required(ErrorMessage = "Parola zorunludur.")]
+            [StringLength(128, ErrorMessage = "Parola en fazla 128 karakter olabilir.")]
             public string Password { get; init; } = string.Empty;
         }
     }

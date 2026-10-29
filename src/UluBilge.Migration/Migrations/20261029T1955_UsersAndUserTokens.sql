@@ -53,6 +53,24 @@ BEGIN TRY
     CREATE NONCLUSTERED INDEX [IX_UserTokens_FamilyId]
         ON [dbo].[UserTokens] ([FamilyId]);
 
+    -- Örnek kullanıcı: admin / admin. Parola, IdentityV3 PasswordHasher ile 210.000 iterasyonda hash'lenmiştir.
+    INSERT INTO [dbo].[Users]
+    (
+        [UserName],
+        [NormalizedUserName],
+        [PasswordHash],
+        [Email],
+        [RoleEnum]
+    )
+    VALUES
+    (
+        N'admin',
+        N'ADMIN',
+        N'AQAAAAIAAzRQAAAAEFDAGz4T8U4SuCl8FIgPEMqj/GSyPfUZI8kJGy40qS7pGduoWr8D0jbb54kEe53+cg==',
+        N'admin@example.com',
+        1 -- RoleEnum.Admin
+    );
+
     COMMIT TRANSACTION;
 END TRY
 BEGIN CATCH
