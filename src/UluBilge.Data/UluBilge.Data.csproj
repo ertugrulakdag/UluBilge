@@ -6,4 +6,8 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\UluBilge.Core\UluBilge.Core.csproj" />
+  </ItemGroup>
+
 </Project>

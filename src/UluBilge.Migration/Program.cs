@@ -1,0 +1,392 @@
+﻿using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Configuration;
+using System.Diagnostics;
+using System.Text.RegularExpressions;
+
+namespace UluBilge.Migration
+{
+    internal static class Program
+    {
+        private static async Task<int> Main()
+        {
+            int exitCode;
+            try
+            {
+                exitCode = await RunAsync();
+            }
+            catch (Exception ex)
+            {
+                WriteLine("Beklenmeyen bir hata olustu.", ConsoleColor.Red);
+                WriteLine($"Neden: {ex.Message}", ConsoleColor.Red);
+                exitCode = 1;
+            }
+
+            WaitForUserAcknowledgement();
+            return exitCode;
+        }
+
+        private static void WaitForUserAcknowledgement()
+        {
+            Console.WriteLine();
+            WriteLine("Kapatmak icin bir tusa basin...", ConsoleColor.DarkGray);
+            try
+            {
+                Console.ReadKey(intercept: true);
+            }
+            catch (InvalidOperationException)
+            {
+                //Console.ReadLine();
+            }
+        }
+
+        private static readonly string[] Environments = ["Development", "Test", "Production"];
+
+        private static async Task<int> RunAsync()
+        {
+            PrintHeader();
+
+            var baseDir = AppContext.BaseDirectory;
+
+            await PrintHistoryOverviewAsync(baseDir);
+
+            var environment = AskEnvironment();
+
+            var configuration = new ConfigurationBuilder()
+                .SetBasePath(baseDir)
+                .AddJsonFile("appsettings.json", optional: false)
+                .AddJsonFile($"appsettings.{environment}.json", optional: false)
+                .Build();
+
+            var projectName = configuration["ProjectName"] ?? "***ProjectName***";
+            var connectionString = configuration["ConnectionString"];
+            if (string.IsNullOrWhiteSpace(connectionString))
+            {
+                WriteLine($"appsettings.{environment}.json içinde 'ConnectionString' bulunamadı.", ConsoleColor.Red);
+                return 1;
+            }
+
+            var connectionInfo = new SqlConnectionStringBuilder(connectionString);
+            var environmentColor = environment switch
+            {
+                "Production" => ConsoleColor.Red,
+                "Test" => ConsoleColor.Yellow,
+                _ => ConsoleColor.Green
+            };
+
+            Console.Title = $"Migration - {projectName} ({environment})";
+
+            Console.WriteLine();
+            PrintBanner($"CALISILAN PROJE: {projectName}", environmentColor);
+            Console.WriteLine();
+            WriteLine($"Proje       : {projectName}", ConsoleColor.Cyan);
+            WriteLine($"Ortam       : {environment}", ConsoleColor.Cyan);
+            WriteLine($"Sunucu      : {connectionInfo.DataSource}", ConsoleColor.Cyan);
+            WriteLine($"Veritabani  : {connectionInfo.InitialCatalog}", ConsoleColor.Cyan);
+            Console.WriteLine();
+
+            var migrationsDir = Path.Combine(baseDir, "Migrations");
+            if (!Directory.Exists(migrationsDir))
+            {
+                WriteLine($"Migrations klasoru bulunamadi: {migrationsDir}", ConsoleColor.Red);
+                return 1;
+            }
+
+            var files = Directory.GetFiles(migrationsDir, "*.sql")
+                .OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (files.Count == 0)
+            {
+                WriteLine("Calistirilacak migration dosyasi bulunamadi.", ConsoleColor.Yellow);
+                return 0;
+            }
+
+            var productVersion = typeof(Program).Assembly.GetName().Version?.ToString() ?? "1.0.0.0";
+
+            using var connection = new SqlConnection(connectionString);
+            try
+            {
+                await connection.OpenAsync();
+            }
+            catch (Exception ex)
+            {
+                WriteLine("Veritabanina baglanilamadi.", ConsoleColor.Red);
+                WriteLine($"Neden: {ex.Message}", ConsoleColor.Red);
+                return 1;
+            }
+
+            try
+            {
+                await EnsureHistoryTableSchemaAsync(connection);
+            }
+            catch (Exception ex)
+            {
+                WriteLine("Migration gecmisi tablosu hazirlanamadi.", ConsoleColor.Red);
+                WriteLine($"Neden: {ex.Message}", ConsoleColor.Red);
+                return 1;
+            }
+
+            HashSet<string> applied;
+            try
+            {
+                applied = await GetAppliedMigrationsAsync(connection);
+            }
+            catch (Exception ex)
+            {
+                WriteLine("Migration gecmisi okunamadi.", ConsoleColor.Red);
+                WriteLine($"Neden: {ex.Message}", ConsoleColor.Red);
+                return 1;
+            }
+
+            var appliedCount = 0;
+            var skippedCount = 0;
+            var totalStopwatch = Stopwatch.StartNew();
+
+            foreach (var file in files)
+            {
+                var migrationId = Path.GetFileNameWithoutExtension(file);
+
+                if (applied.Contains(migrationId))
+                {
+                    WriteLine($"[ATLANDI]  {migrationId}  (zaten uygulanmis)", ConsoleColor.Yellow);
+                    skippedCount++;
+                    continue;
+                }
+
+                var sql = await File.ReadAllTextAsync(file);
+                var batches = SplitBatches(sql);
+
+                if (batches.Count == 0)
+                {
+                    WriteLine($"[UYARI]    {migrationId}  icinde calistirilacak SQL bulunamadi, atlaniyor.", ConsoleColor.Yellow);
+                    continue;
+                }
+
+                var stopwatch = Stopwatch.StartNew();
+                var batchIndex = 0;
+                try
+                {
+                    foreach (var batch in batches)
+                    {
+                        batchIndex++;
+                        using var command = connection.CreateCommand();
+                        command.CommandText = batch;
+                        command.CommandTimeout = 120;
+                        await command.ExecuteNonQueryAsync();
+                    }
+
+                    var createDateUtc = DateTime.UtcNow;
+                    using (var historyCommand = connection.CreateCommand())
+                    {
+                        historyCommand.CommandText =
+                            "INSERT INTO dbo.__MigrationsHistory (MigrationId, ProductVersion, CreateDate) VALUES (@MigrationId, @ProductVersion, @CreateDate);";
+                        historyCommand.Parameters.AddWithValue("@MigrationId", migrationId);
+                        historyCommand.Parameters.AddWithValue("@ProductVersion", productVersion);
+                        historyCommand.Parameters.Add("@CreateDate", System.Data.SqlDbType.DateTime2).Value = createDateUtc;
+                        await historyCommand.ExecuteNonQueryAsync();
+                    }
+
+                    stopwatch.Stop();
+                    WriteLine(
+                        $"[BASARILI] {migrationId}  ({batches.Count} batch, {stopwatch.ElapsedMilliseconds} ms, UTC: {createDateUtc:yyyy-MM-dd HH:mm:ss})",
+                        ConsoleColor.Green);
+                    appliedCount++;
+                }
+                catch (Exception ex)
+                {
+                    stopwatch.Stop();
+                    WriteLine(
+                        $"[HATA]     {migrationId}  batch {batchIndex}/{batches.Count} icinde basarisiz oldu ({stopwatch.ElapsedMilliseconds} ms)",
+                        ConsoleColor.Red);
+                    WriteLine($"           Neden: {ex.Message}", ConsoleColor.Red);
+                    totalStopwatch.Stop();
+                    PrintSummary(appliedCount, skippedCount, files.Count, totalStopwatch.ElapsedMilliseconds, failed: true);
+                    return 1;
+                }
+            }
+
+            totalStopwatch.Stop();
+            PrintSummary(appliedCount, skippedCount, files.Count, totalStopwatch.ElapsedMilliseconds, failed: false);
+            return 0;
+        }
+
+        private static string AskEnvironment()
+        {
+            Console.WriteLine("Hangi ortamda calistirilsin?");
+            Console.WriteLine(" 1) Development (varsayilan)");
+            Console.WriteLine(" 2) Test");
+            Console.WriteLine(" 3) Production");
+            Console.Write("Seciminiz [1]: ");
+            var input = Console.ReadLine()?.Trim();
+
+            return input switch
+            {
+                null or "" or "1" => "Development",
+                "2" => "Test",
+                "3" => "Production",
+                _ when input.Equals("Development", StringComparison.OrdinalIgnoreCase) => "Development",
+                _ when input.Equals("Test", StringComparison.OrdinalIgnoreCase) => "Test",
+                _ when input.Equals("Production", StringComparison.OrdinalIgnoreCase) => "Production",
+                _ => "Development"
+            };
+        }
+
+        private static async Task PrintHistoryOverviewAsync(string baseDir)
+        {
+            WriteLine("__MigrationsHistory durumu:", ConsoleColor.Magenta);
+            Console.WriteLine();
+
+            var rows = new List<(string Environment, string ProjectName, string Status, ConsoleColor Color)>();
+
+            foreach (var env in Environments)
+            {
+                var configuration = new ConfigurationBuilder()
+                    .SetBasePath(baseDir)
+                    .AddJsonFile("appsettings.json", optional: false)
+                    .AddJsonFile($"appsettings.{env}.json", optional: false)
+                    .Build();
+
+                var projectName = configuration["ProjectName"] ?? "***ProjectName***";
+                var connectionString = configuration["ConnectionString"];
+
+                if (string.IsNullOrWhiteSpace(connectionString))
+                {
+                    rows.Add((env, projectName, "ConnectionString bulunamadi", ConsoleColor.Red));
+                    continue;
+                }
+
+                try
+                {
+                    var previewBuilder = new SqlConnectionStringBuilder(connectionString) { ConnectTimeout = 5 };
+                    using var connection = new SqlConnection(previewBuilder.ConnectionString);
+                    await connection.OpenAsync();
+                    await EnsureHistoryTableSchemaAsync(connection);
+
+                    using var command = connection.CreateCommand();
+                    command.CommandText =
+                        "SELECT COUNT(*), MAX(CreateDate) FROM dbo.__MigrationsHistory;";
+                    using var reader = await command.ExecuteReaderAsync();
+
+                    var total = 0;
+                    DateTime? lastDate = null;
+                    if (await reader.ReadAsync())
+                    {
+                        total = reader.GetInt32(0);
+                        lastDate = reader.IsDBNull(1) ? null : reader.GetDateTime(1);
+                    }
+                    await reader.CloseAsync();
+
+                    var status = total == 0
+                        ? "Henuz migration uygulanmamis"
+                        : $"{total} migration uygulanmis, son calisma: {lastDate:yyyy-MM-dd HH:mm:ss} UTC";
+
+                    rows.Add((env, projectName, status, ConsoleColor.Cyan));
+                }
+                catch (Exception ex)
+                {
+                    rows.Add((env, projectName, $"Baglanilamadi: {ex.Message}", ConsoleColor.Red));
+                }
+            }
+
+            var envWidth = Math.Max("Ortam".Length, rows.Max(r => r.Environment.Length));
+            var projectWidth = Math.Max("Proje".Length, rows.Max(r => r.ProjectName.Length));
+
+            WriteLine($"{"Ortam".PadRight(envWidth)}  {"Proje".PadRight(projectWidth)}  Durum", ConsoleColor.DarkGray);
+            WriteLine(new string('-', envWidth + projectWidth + 45), ConsoleColor.DarkGray);
+            foreach (var row in rows)
+            {
+                WriteLine($"{row.Environment.PadRight(envWidth)}  {row.ProjectName.PadRight(projectWidth)}  {row.Status}", row.Color);
+            }
+
+            Console.WriteLine();
+        }
+
+        private static async Task EnsureHistoryTableSchemaAsync(SqlConnection connection)
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+            IF OBJECT_ID('dbo.__MigrationsHistory', 'U') IS NULL
+            BEGIN
+                CREATE TABLE [dbo].[__MigrationsHistory] (
+                    [MigrationId] [nvarchar](150) NOT NULL,
+                    [ProductVersion] [nvarchar](32) NOT NULL,
+                    [CreateDate] [datetime2](3) NOT NULL DEFAULT (SYSUTCDATETIME()),
+                    CONSTRAINT [PK___MigrationsHistory] PRIMARY KEY CLUSTERED ([MigrationId] ASC)
+                );
+            END;
+
+            IF OBJECT_ID('dbo.__MigrationsHistory', 'U') IS NOT NULL
+               AND COL_LENGTH('dbo.__MigrationsHistory', 'CreateDate') IS NULL
+            BEGIN
+                ALTER TABLE dbo.__MigrationsHistory ADD CreateDate DATETIME2(3) NOT NULL
+                    CONSTRAINT DF___MigrationsHistory_CreateDate DEFAULT (SYSUTCDATETIME());
+            END;
+            """;
+            await command.ExecuteNonQueryAsync();
+        }
+
+        private static async Task<HashSet<string>> GetAppliedMigrationsAsync(SqlConnection connection)
+        {
+            var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            using (var checkCommand = connection.CreateCommand())
+            {
+                checkCommand.CommandText = "SELECT OBJECT_ID('dbo.__MigrationsHistory', 'U');";
+                var tableId = await checkCommand.ExecuteScalarAsync();
+                if (tableId is null or DBNull)
+                    return result;
+            }
+
+            using var selectCommand = connection.CreateCommand();
+            selectCommand.CommandText = "SELECT MigrationId FROM dbo.__MigrationsHistory;";
+            using var reader = await selectCommand.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+                result.Add(reader.GetString(0));
+
+            return result;
+        }
+
+        private static List<string> SplitBatches(string sql)
+        {
+            return Regex.Split(sql, @"^\s*GO\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase)
+                .Select(b => b.Trim())
+                .Where(b => b.Length > 0)
+                .ToList();
+        }
+
+        private static void PrintHeader()
+        {
+            Console.WriteLine();
+            WriteLine("=== Migration Runner ===", ConsoleColor.Magenta);
+            Console.WriteLine();
+        }
+
+        private static void PrintBanner(string text, ConsoleColor color)
+        {
+            var border = new string('#', text.Length + 4);
+            WriteLine(border, color);
+            WriteLine($"# {text} #", color);
+            WriteLine(border, color);
+        }
+
+        private static void PrintSummary(int applied, int skipped, int total, long elapsedMs, bool failed)
+        {
+            Console.WriteLine();
+            WriteLine("--------------------------------------------------", ConsoleColor.DarkGray);
+            WriteLine($"Toplam dosya : {total}", ConsoleColor.Cyan);
+            WriteLine($"Uygulanan    : {applied}", ConsoleColor.Green);
+            WriteLine($"Atlanan      : {skipped}", ConsoleColor.Yellow);
+            WriteLine($"Gecen sure   : {elapsedMs} ms", ConsoleColor.Cyan);
+            WriteLine(failed ? "Sonuc        : HATA ILE DURDU" : "Sonuc        : TAMAMLANDI", failed ? ConsoleColor.Red : ConsoleColor.Green);
+            WriteLine("--------------------------------------------------", ConsoleColor.DarkGray);
+        }
+
+        private static void WriteLine(string text, ConsoleColor color)
+        {
+            Console.ForegroundColor = color;
+            Console.WriteLine(text);
+            Console.ResetColor();
+        }
+    }
+
+}
