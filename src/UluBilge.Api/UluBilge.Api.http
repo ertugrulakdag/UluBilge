@@ -1,6 +1,36 @@
 @UluBilge.Api_HostAddress = http://localhost:5156
 
-GET {{UluBilge.Api_HostAddress}}/weatherforecast/
+GET {{UluBilge.Api_HostAddress}}/v1/Region/GetRegions?pageNumber=1&pageSize=20
+Accept: application/json
+
+###
+
+GET {{UluBilge.Api_HostAddress}}/v1/Region/GetRegion/1
+Accept: application/json
+
+###
+
+POST {{UluBilge.Api_HostAddress}}/v1/Region/Add
+Content-Type: application/json
+
+{
+  "regionId": 5,
+  "regionDescription": "Marmara"
+}
+
+###
+
+PUT {{UluBilge.Api_HostAddress}}/v1/Region/Update
+Content-Type: application/json
+
+{
+  "regionId": 5,
+  "regionDescription": "Marmara Bölgesi"
+}
+
+###
+
+DELETE {{UluBilge.Api_HostAddress}}/v1/Region/Delete/5
 Accept: application/json
 
 ###

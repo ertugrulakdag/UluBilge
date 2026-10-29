@@ -16,7 +16,7 @@ namespace UluBilge.Migration
             }
             catch (Exception ex)
             {
-                WriteLine("Beklenmeyen bir hata olustu.", ConsoleColor.Red);
+                WriteLine("Beklenmeyen bir hata oluştu.", ConsoleColor.Red);
                 WriteLine($"Neden: {ex.Message}", ConsoleColor.Red);
                 exitCode = 1;
             }
@@ -28,7 +28,7 @@ namespace UluBilge.Migration
         private static void WaitForUserAcknowledgement()
         {
             Console.WriteLine();
-            WriteLine("Kapatmak icin bir tusa basin...", ConsoleColor.DarkGray);
+            WriteLine("Kapatmak için bir tuşa basın...", ConsoleColor.DarkGray);
             try
             {
                 Console.ReadKey(intercept: true);
@@ -39,33 +39,35 @@ namespace UluBilge.Migration
             }
         }
 
-        private static readonly string[] Environments = ["Development", "Test", "Production"];
-
         private static async Task<int> RunAsync()
         {
             PrintHeader();
 
             var baseDir = AppContext.BaseDirectory;
 
-            await PrintHistoryOverviewAsync(baseDir);
-
             var environment = AskEnvironment();
 
             var configuration = new ConfigurationBuilder()
                 .SetBasePath(baseDir)
                 .AddJsonFile("appsettings.json", optional: false)
-                .AddJsonFile($"appsettings.{environment}.json", optional: false)
+                .AddJsonFile($"appsettings.{environment}.json", optional: true)
                 .Build();
 
-            var projectName = configuration["ProjectName"] ?? "***ProjectName***";
-            var connectionString = configuration["ConnectionString"];
+            var projectName = configuration["ProjectName"] ?? "UluBilge";
+            var connectionString = configuration.GetConnectionString("WriteConnection");
             if (string.IsNullOrWhiteSpace(connectionString))
             {
-                WriteLine($"appsettings.{environment}.json içinde 'ConnectionString' bulunamadı.", ConsoleColor.Red);
+                WriteLine("Yapılandırmada 'ConnectionStrings:WriteConnection' bulunamadı.", ConsoleColor.Red);
                 return 1;
             }
 
             var connectionInfo = new SqlConnectionStringBuilder(connectionString);
+            var environmentName = environment switch
+            {
+                "Development" => "Geliştirme",
+                "Production" => "Üretim",
+                _ => environment
+            };
             var environmentColor = environment switch
             {
                 "Production" => ConsoleColor.Red,
@@ -73,21 +75,21 @@ namespace UluBilge.Migration
                 _ => ConsoleColor.Green
             };
 
-            Console.Title = $"Migration - {projectName} ({environment})";
+            Console.Title = $"Veritabanı Geçiş Aracı - {projectName} ({environmentName})";
 
             Console.WriteLine();
-            PrintBanner($"CALISILAN PROJE: {projectName}", environmentColor);
+            PrintBanner($"ÇALIŞILAN PROJE: {projectName}", environmentColor);
             Console.WriteLine();
             WriteLine($"Proje       : {projectName}", ConsoleColor.Cyan);
-            WriteLine($"Ortam       : {environment}", ConsoleColor.Cyan);
+            WriteLine($"Ortam       : {environmentName}", ConsoleColor.Cyan);
             WriteLine($"Sunucu      : {connectionInfo.DataSource}", ConsoleColor.Cyan);
-            WriteLine($"Veritabani  : {connectionInfo.InitialCatalog}", ConsoleColor.Cyan);
+            WriteLine($"Veritabanı  : {connectionInfo.InitialCatalog}", ConsoleColor.Cyan);
             Console.WriteLine();
 
             var migrationsDir = Path.Combine(baseDir, "Migrations");
             if (!Directory.Exists(migrationsDir))
             {
-                WriteLine($"Migrations klasoru bulunamadi: {migrationsDir}", ConsoleColor.Red);
+                WriteLine($"Migrations klasörü bulunamadı: {migrationsDir}", ConsoleColor.Red);
                 return 1;
             }
 
@@ -97,20 +99,20 @@ namespace UluBilge.Migration
 
             if (files.Count == 0)
             {
-                WriteLine("Calistirilacak migration dosyasi bulunamadi.", ConsoleColor.Yellow);
+                WriteLine("Çalıştırılacak veritabanı geçiş dosyası bulunamadı.", ConsoleColor.Yellow);
                 return 0;
             }
 
             var productVersion = typeof(Program).Assembly.GetName().Version?.ToString() ?? "1.0.0.0";
 
-            using var connection = new SqlConnection(connectionString);
+            await using var connection = new SqlConnection(connectionString);
             try
             {
                 await connection.OpenAsync();
             }
             catch (Exception ex)
             {
-                WriteLine("Veritabanina baglanilamadi.", ConsoleColor.Red);
+                WriteLine("Veritabanına bağlanılamadı.", ConsoleColor.Red);
                 WriteLine($"Neden: {ex.Message}", ConsoleColor.Red);
                 return 1;
             }
@@ -121,7 +123,7 @@ namespace UluBilge.Migration
             }
             catch (Exception ex)
             {
-                WriteLine("Migration gecmisi tablosu hazirlanamadi.", ConsoleColor.Red);
+                WriteLine("Veritabanı geçiş geçmişi tablosu hazırlanamadı.", ConsoleColor.Red);
                 WriteLine($"Neden: {ex.Message}", ConsoleColor.Red);
                 return 1;
             }
@@ -133,7 +135,7 @@ namespace UluBilge.Migration
             }
             catch (Exception ex)
             {
-                WriteLine("Migration gecmisi okunamadi.", ConsoleColor.Red);
+                WriteLine("Veritabanı geçiş geçmişi okunamadı.", ConsoleColor.Red);
                 WriteLine($"Neden: {ex.Message}", ConsoleColor.Red);
                 return 1;
             }
@@ -148,7 +150,7 @@ namespace UluBilge.Migration
 
                 if (applied.Contains(migrationId))
                 {
-                    WriteLine($"[ATLANDI]  {migrationId}  (zaten uygulanmis)", ConsoleColor.Yellow);
+                    WriteLine($"[ATLANDI]  {migrationId}  (zaten uygulanmış)", ConsoleColor.Yellow);
                     skippedCount++;
                     continue;
                 }
@@ -158,7 +160,7 @@ namespace UluBilge.Migration
 
                 if (batches.Count == 0)
                 {
-                    WriteLine($"[UYARI]    {migrationId}  icinde calistirilacak SQL bulunamadi, atlaniyor.", ConsoleColor.Yellow);
+                    WriteLine($"[UYARI]    {migrationId}  içinde çalıştırılacak SQL bulunamadı, atlanıyor.", ConsoleColor.Yellow);
                     continue;
                 }
 
@@ -188,7 +190,7 @@ namespace UluBilge.Migration
 
                     stopwatch.Stop();
                     WriteLine(
-                        $"[BASARILI] {migrationId}  ({batches.Count} batch, {stopwatch.ElapsedMilliseconds} ms, UTC: {createDateUtc:yyyy-MM-dd HH:mm:ss})",
+                        $"[BAŞARILI] {migrationId}  ({batches.Count} komut grubu, {stopwatch.ElapsedMilliseconds} ms, UTC: {createDateUtc:yyyy-MM-dd HH:mm:ss})",
                         ConsoleColor.Green);
                     appliedCount++;
                 }
@@ -196,7 +198,7 @@ namespace UluBilge.Migration
                 {
                     stopwatch.Stop();
                     WriteLine(
-                        $"[HATA]     {migrationId}  batch {batchIndex}/{batches.Count} icinde basarisiz oldu ({stopwatch.ElapsedMilliseconds} ms)",
+                        $"[HATA]     {migrationId}  {batchIndex}/{batches.Count} komut grubunda başarısız oldu ({stopwatch.ElapsedMilliseconds} ms)",
                         ConsoleColor.Red);
                     WriteLine($"           Neden: {ex.Message}", ConsoleColor.Red);
                     totalStopwatch.Stop();
@@ -212,11 +214,11 @@ namespace UluBilge.Migration
 
         private static string AskEnvironment()
         {
-            Console.WriteLine("Hangi ortamda calistirilsin?");
-            Console.WriteLine(" 1) Development (varsayilan)");
+            Console.WriteLine("Hangi ortamda çalıştırılsın?");
+            Console.WriteLine(" 1) Geliştirme (varsayılan)");
             Console.WriteLine(" 2) Test");
-            Console.WriteLine(" 3) Production");
-            Console.Write("Seciminiz [1]: ");
+            Console.WriteLine(" 3) Üretim");
+            Console.Write("Seçiminiz [1]: ");
             var input = Console.ReadLine()?.Trim();
 
             return input switch
@@ -229,76 +231,6 @@ namespace UluBilge.Migration
                 _ when input.Equals("Production", StringComparison.OrdinalIgnoreCase) => "Production",
                 _ => "Development"
             };
-        }
-
-        private static async Task PrintHistoryOverviewAsync(string baseDir)
-        {
-            WriteLine("__MigrationsHistory durumu:", ConsoleColor.Magenta);
-            Console.WriteLine();
-
-            var rows = new List<(string Environment, string ProjectName, string Status, ConsoleColor Color)>();
-
-            foreach (var env in Environments)
-            {
-                var configuration = new ConfigurationBuilder()
-                    .SetBasePath(baseDir)
-                    .AddJsonFile("appsettings.json", optional: false)
-                    .AddJsonFile($"appsettings.{env}.json", optional: false)
-                    .Build();
-
-                var projectName = configuration["ProjectName"] ?? "***ProjectName***";
-                var connectionString = configuration["ConnectionString"];
-
-                if (string.IsNullOrWhiteSpace(connectionString))
-                {
-                    rows.Add((env, projectName, "ConnectionString bulunamadi", ConsoleColor.Red));
-                    continue;
-                }
-
-                try
-                {
-                    var previewBuilder = new SqlConnectionStringBuilder(connectionString) { ConnectTimeout = 5 };
-                    using var connection = new SqlConnection(previewBuilder.ConnectionString);
-                    await connection.OpenAsync();
-                    await EnsureHistoryTableSchemaAsync(connection);
-
-                    using var command = connection.CreateCommand();
-                    command.CommandText =
-                        "SELECT COUNT(*), MAX(CreateDate) FROM dbo.__MigrationsHistory;";
-                    using var reader = await command.ExecuteReaderAsync();
-
-                    var total = 0;
-                    DateTime? lastDate = null;
-                    if (await reader.ReadAsync())
-                    {
-                        total = reader.GetInt32(0);
-                        lastDate = reader.IsDBNull(1) ? null : reader.GetDateTime(1);
-                    }
-                    await reader.CloseAsync();
-
-                    var status = total == 0
-                        ? "Henuz migration uygulanmamis"
-                        : $"{total} migration uygulanmis, son calisma: {lastDate:yyyy-MM-dd HH:mm:ss} UTC";
-
-                    rows.Add((env, projectName, status, ConsoleColor.Cyan));
-                }
-                catch (Exception ex)
-                {
-                    rows.Add((env, projectName, $"Baglanilamadi: {ex.Message}", ConsoleColor.Red));
-                }
-            }
-
-            var envWidth = Math.Max("Ortam".Length, rows.Max(r => r.Environment.Length));
-            var projectWidth = Math.Max("Proje".Length, rows.Max(r => r.ProjectName.Length));
-
-            WriteLine($"{"Ortam".PadRight(envWidth)}  {"Proje".PadRight(projectWidth)}  Durum", ConsoleColor.DarkGray);
-            WriteLine(new string('-', envWidth + projectWidth + 45), ConsoleColor.DarkGray);
-            foreach (var row in rows)
-            {
-                WriteLine($"{row.Environment.PadRight(envWidth)}  {row.ProjectName.PadRight(projectWidth)}  {row.Status}", row.Color);
-            }
-
-            Console.WriteLine();
         }
 
         private static async Task EnsureHistoryTableSchemaAsync(SqlConnection connection)
@@ -357,7 +289,7 @@ namespace UluBilge.Migration
         private static void PrintHeader()
         {
             Console.WriteLine();
-            WriteLine("=== Migration Runner ===", ConsoleColor.Magenta);
+            WriteLine("=== Veritabanı Geçiş Aracı ===", ConsoleColor.Magenta);
             Console.WriteLine();
         }
 
@@ -376,8 +308,8 @@ namespace UluBilge.Migration
             WriteLine($"Toplam dosya : {total}", ConsoleColor.Cyan);
             WriteLine($"Uygulanan    : {applied}", ConsoleColor.Green);
             WriteLine($"Atlanan      : {skipped}", ConsoleColor.Yellow);
-            WriteLine($"Gecen sure   : {elapsedMs} ms", ConsoleColor.Cyan);
-            WriteLine(failed ? "Sonuc        : HATA ILE DURDU" : "Sonuc        : TAMAMLANDI", failed ? ConsoleColor.Red : ConsoleColor.Green);
+            WriteLine($"Geçen süre   : {elapsedMs} ms", ConsoleColor.Cyan);
+            WriteLine(failed ? "Sonuç        : HATA İLE DURDU" : "Sonuç        : TAMAMLANDI", failed ? ConsoleColor.Red : ConsoleColor.Green);
             WriteLine("--------------------------------------------------", ConsoleColor.DarkGray);
         }
 
