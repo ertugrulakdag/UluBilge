@@ -119,9 +119,11 @@ Debug derlemelerinde `RoleAuthorize` kullanılan controller ve metotlarda kimlik
 ve rol kontrolü atlanır. Release derlemelerinde token ve rol kontrolleri uygulanır.
 
 `year` isteğe bağlıdır; verilmezse tüm siparişler rapora katılır. Yıl aralığı
-1753–9999'dur ve filtre `Orders.OrderDate` alanına uygulanır. `topCount` isteğe
+1753 ile içinde bulunduğumuz yıl arasındadır ve filtre `Orders.OrderDate` alanına uygulanır. `topCount` isteğe
 bağlıdır; gönderilmezse veya null ise 10 kullanılır. Değer verildiğinde 1–100
-arasında olmalıdır. Hatalı parametreler 400 döndürür.
+arasında olmalıdır; yıl belirtilmediğinde üst sınır 50'dir. Bu iki ek örnek iş
+kuralı Query'deki `IValidatableObject` ile API ve MCP için ortak doğrulanır.
+Hatalı parametreler API'de 400 döndürür.
 
 Yanıttaki `data.data` listesinde `productId`, `productName`, `totalQuantity`,
 `orderCount` ve `netSales` bulunur. Net satış, sipariş satırındaki

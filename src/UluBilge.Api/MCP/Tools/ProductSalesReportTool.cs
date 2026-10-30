@@ -15,8 +15,8 @@ namespace UluBilge.Api.MCP.Tools
         [Description("Northwind siparişlerinden ürün bazında satış raporu oluşturur ve indirim sonrası net satış tutarı en yüksek ürünleri listeler. Her ürün için ürün numarası ve adı, toplam satılan adet, sipariş sayısı ve net satış tutarı döndürülür. Kargo bedeli dahil değildir.")]
         public static async Task<BaseResponse<GetProductSalesAsync.Result>> GetProductSalesAsync(
             IAsyncQueryHandler<GetProductSalesAsync.Query, GetProductSalesAsync.Result> queryHandler,
-            [Description("Sipariş tarihine göre filtrelenecek yıl (1753–9999). Gönderilmezse veya null ise tüm yıllar alınır.")] int? year = null,
-            [Description("Döndürülecek en fazla ürün sayısı (1–100). Gönderilmezse veya null ise 10 kullanılır.")] int? topCount = null,
+            [Description("Sipariş tarihine göre filtrelenecek yıl (1753 ile içinde bulunduğumuz yıl arasında). Gönderilmezse veya null ise tüm yıllar alınır.")] int? year = null,
+            [Description("Döndürülecek en fazla ürün sayısı (1–100; yıl belirtilmezse en fazla 50). Gönderilmezse veya null ise 10 kullanılır.")] int? topCount = null,
             CancellationToken ct = default)
         {
             try
