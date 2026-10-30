@@ -90,6 +90,7 @@ public sealed class StdioIntegrationTests
                 var tool = Assert.Single(await client.ListToolsAsync(cancellationToken: ct));
                 Assert.Equal("get_regions", tool.Name);
                 Assert.NotNull(tool.ProtocolTool.OutputSchema);
+                Assert.True(tool.ProtocolTool.OutputSchema.Value.GetProperty("properties").TryGetProperty("items", out _));
                 Assert.Equal(0, Volatile.Read(ref loginCount));
 
                 var result = await client.CallToolAsync("get_regions", cancellationToken: ct);

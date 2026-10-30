@@ -9,8 +9,21 @@
 - **UluBilge.Data:** Repository arayüzleri, Dapper repository'leri, bağlantı ayarları ve Unit of Work.
 - **UluBilge.Core:** Entity, sayfalama modeli ve uygulamanın kendi CQRS sözleşmeleri.
 - **UluBilge.Migration:** Northwind SQL scriptlerini yazma bağlantısıyla çalıştıran konsol uygulaması.
+- **UluBilge.McpServer:** Mevcut API'ye AuthController ile giriş yapan ve Region listesini MCP istemcilerine sunan stdio sunucusu.
 
 Bağımlılık yönü `Api → App → Data → Core` şeklindedir.
+MCP sunucusu API'ye HTTP üzerinden bağlanır; bu katmanlara doğrudan proje referansı vermez.
+
+## MCP ile bölge listeleme
+
+`src/UluBilge.McpServer` projesindeki `get_regions(pageNumber=1, pageSize=20)` aracı,
+AuthController üzerinden login/refresh yaparak Region listesini getirir. Sonuç,
+MCP Inspector veya bağlı istemcide metin ve yapılandırılmış JSON olarak gösterilir.
+API kullanıcısının Admin rolüne sahip olması gerekir; kimlik bilgileri user-secrets
+veya ortam değişkenleriyle sağlanır.
+
+Kurulum, Inspector komutu ve istemci yapılandırması: [MCP kullanım belgesi](docs/mcpserver-kullanim.md).
+Mimari kararlar: [MCP analizi](docs/mcpserver-analiz.md).
 
 ## Bağlantılar ve Unit of Work
 
@@ -75,8 +88,7 @@ otomatik çalıştırılmaz.
 
 ## Region CRUD
 
-Bütün Region uç noktaları Bearer access token gerektirir. Okuma işlemlerinde
-`regions:read`, ekleme/güncelleme/silmede `regions:write` yetkisi aranır.
+Bütün Region uç noktaları Bearer access token ve `RoleEnum.Admin` rolünü gerektirir.
 
 | HTTP | Yol | İşlem |
 | --- | --- | --- |
@@ -105,10 +117,7 @@ Başarılı yanıtlar SitePanosu'ndaki gibi `data` alanıyla sarılır. Geçersi
 çatışmaları 409 Problem Details yanıtı alır. Region şemasında `IsActive` olmadığından
 silme fiziksel olarak yapılır.
 
-`src/UluBilge.Api/UluBilge.Api.http` dosyasında giriş ve Bearer token ile
-çalıştırılabilecek CRUD istekleri bulunur.
-
-## JWT ve mock giriş
+## JWT ve veritabanı oturumları
 
 Yerel geliştirmede `admin` kullanıcı adı ve `admin` parolasıyla giriş yapılabilir:
 
@@ -124,15 +133,11 @@ yapıştırın veya isteklerde `Authorization: Bearer <accessToken>` başlığı
 `GET /v1/Auth/me` mevcut kullanıcıyı ve yetkilerini döndürür. Tokenlar URL veya
 cookie üzerinden kabul edilmez; parola token içine yazılmaz.
 
-Mock kullanıcı yalnızca **Development** ortamında çalışır; geliştirme sunucusunu
-localhost üzerinde kullanın. `DevelopmentUserAuthenticator`,
-`IUserAuthenticator` arayüzünü uygular. DB'ye geçerken gerçek doğrulamayı yapan
-uygulamayı `builder.Services.AddScoped<IUserAuthenticator, DatabaseUserAuthenticator>()`
-ile `AddApiAuthentication` çağrısından önce kaydedin. Kullanıcı kimliği, roller ve
-yetkiler sunucu tarafından belirlenmelidir. Parolaları DB'de güvenilir bir parola
-hashleme kütüphanesiyle saklayın; düz metin karşılaştırması yapmayın. Mevcut mock,
-IdentityV3 PBKDF2 HMAC-SHA512 ve 210.000 iterasyon kullanır. Production, Staging
-ve Test ortamları gerçek bir `IUserAuthenticator` kaydı olmadan başlatılmaz.
+Kimlik doğrulama bütün ortamlarda `DatabaseUserAuthenticationService` ve
+`dbo.Users` tablosu üzerinden yapılır. Örnek admin hesabı kullanıcı migration'ıyla
+oluşturulur. Parolalar IdentityV3 PasswordHasher ve 210.000 iterasyonla doğrulanır.
+Beş başarısız girişte hesap 15 dakika kilitlenir. Kullanıcının aktifliği, rolü ve
+oturumu API tarafından kontrol edilir.
 
 JWT ayarları `Jwt:Issuer`, `Jwt:Audience` ve `Jwt:AccessTokenLifetimeMinutes`
 alanlarıdır. Varsayılan ömür 5 dakika, izin verilen aralık 1–15 dakikadır.
@@ -166,14 +171,15 @@ gelen forwarded header'lar yapılandırılmalıdır; uygulama bunlara kendiliği
 güvenmez. Birden çok API örneği için giriş sınırı ve hesap kilitleme DB/gateway
 katmanında ortak uygulanmalıdır.
 
-Bu aşamada refresh token ve logout/revocation uç noktası yoktur. Süresi dolan
-token için yeniden giriş yapılır; istemciden token silmek, mevcut tokenı sunucuda
-iptal etmez. Anlık oturum iptali ve refresh token eklenirken kalıcı oturum kaydı,
-rotation ve tekrar kullanım tespiti de eklenmelidir. Tarayıcı istemcisi tokenı
-kalıcı `localStorage` yerine bellekte tutmalıdır.
+Giriş yanıtı access tokenla birlikte refresh token döndürür. `POST /v1/Auth/refresh`
+mevcut refresh tokenı tüketerek yeni bir token çifti oluşturur; zincirin mutlak
+bitiş tarihi uzatılmaz. Refresh tokenın tekrar kullanılması token ailesini iptal
+eder. `POST /v1/Auth/logout` Bearer tokenın bağlı olduğu oturum ailesini iptal
+eder. Refresh tokenlar veritabanında SHA-256 özetiyle saklanır. Her korumalı
+istekte oturumun geçerliliği veritabanından denetlenir.
 
-Güvenlik testleri SQL bağlantısı kullanmadan gerçek JWT doğrulayıcısı üzerinden
-giriş, yetkilendirme, geçersiz tokenlar, yapılandırma ve ortam sınırlarını denetler:
+MCP testleri SQL Server gerektirmeden HTTP sözleşmelerini, token yönetimini ve
+ayrı süreçler arasındaki gerçek MCP iletişimini doğrular:
 
 ```powershell
 dotnet test UluBilge.slnx

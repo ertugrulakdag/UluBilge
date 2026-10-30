@@ -186,4 +186,44 @@ public sealed class AuthenticationTests
             Assert.Equal(2, context.Requests.Count);
         }
     }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CancelledOrInvalidatedRefreshCannotRestoreTheSession(bool cancelRequest)
+    {
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        ApiTestContext? context = null;
+        using (context = new ApiTestContext(async (request, ct) =>
+        {
+            if (request.RequestUri!.AbsolutePath == "/v1/Auth/refresh")
+            {
+                entered.SetResult();
+                await release.Task.WaitAsync(ct);
+            }
+            return request.Method == HttpMethod.Post ? context!.Token() : ApiTestContext.Regions();
+        }))
+        {
+            await context.Api.GetRegionsAsync();
+            context.Time.Advance(TimeSpan.FromMinutes(4.75));
+            using var cancellation = new CancellationTokenSource();
+            var call = context.Api.GetRegionsAsync(cancellationToken: cancellation.Token);
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            if (cancelRequest)
+            {
+                cancellation.Cancel();
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => call);
+            }
+            else
+            {
+                context.Tokens.Invalidate();
+                release.SetResult();
+                await Assert.ThrowsAsync<ApiException>(() => call);
+            }
+            var next = await Assert.ThrowsAsync<ApiException>(() => context.Api.GetRegionsAsync());
+            Assert.Equal(HttpStatusCode.Unauthorized, next.StatusCode);
+            Assert.Equal(3, context.Requests.Count);
+        }
+    }
 }

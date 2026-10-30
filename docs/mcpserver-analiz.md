@@ -1,7 +1,9 @@
 # UluBilge.McpServer — analiz ve uygulama önerisi
 
 Tarih: 30.10.2026  
-Durum: Kullanıcı onayı bekleniyor. Bu aşamada yalnızca analiz hazırlanmıştır.
+Durum: Kullanıcı tarafından 30.10.2026 tarihinde uygulama onayı verildi.
+
+Uygulama ve çalıştırma bilgileri: [MCP sunucusu kullanım belgesi](mcpserver-kullanim.md).
 
 ## 1. Amaç ve ilk teslimat
 
