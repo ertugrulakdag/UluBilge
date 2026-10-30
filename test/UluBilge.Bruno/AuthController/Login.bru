@@ -7,7 +7,7 @@ meta {
 post {
   url: {{baseURL}}/v1/Auth/Login
   body: json
-  auth: inherit
+  auth: none
 }
 
 body:json {
@@ -22,11 +22,13 @@ tests {
   const json = typeof body === "string" ? JSON.parse(body) : body;
   
   const accessToken = json?.data?.accessToken;
-  if (!accessToken){
-    throw new Error("Token yok");
+  const refreshToken = json?.data?.refreshToken;
+  if (res.getStatus() !== 200 || !accessToken || !refreshToken){
+    throw new Error("Giris basarisiz veya tokenlar eksik");
   } 
   
   bru.setEnvVar("accessToken", accessToken);
+  bru.setEnvVar("refreshToken", refreshToken);
 }
 
 settings {

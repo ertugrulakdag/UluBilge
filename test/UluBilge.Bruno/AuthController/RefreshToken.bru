@@ -1,0 +1,36 @@
+meta {
+  name: RefreshToken
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseURL}}/v1/Auth/RefreshToken
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "refreshToken": "{{refreshToken}}"
+  }
+}
+
+tests {
+  const body = res.getBody();
+  const json = typeof body === "string" ? JSON.parse(body) : body;
+  const accessToken = json?.data?.accessToken;
+  const refreshToken = json?.data?.refreshToken;
+
+  if (res.getStatus() !== 200 || !accessToken || !refreshToken) {
+    throw new Error("Token yenileme basarisiz veya tokenlar eksik");
+  }
+
+  bru.setEnvVar("accessToken", accessToken);
+  bru.setEnvVar("refreshToken", refreshToken);
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

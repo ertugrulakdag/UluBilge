@@ -17,9 +17,9 @@ namespace UluBilge.App.Authentication
         {
             var settings = configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
             if (string.IsNullOrWhiteSpace(settings.Issuer) || string.IsNullOrWhiteSpace(settings.Audience)
-                || settings.AccessTokenLifetimeMinutes is < 1 or > 15)
+                || settings.AccessTokenLifetimeMinutes is < 1 or > 15 || settings.RefreshTokenLifetimeDays is < 1 or > 30)
             {
-                throw new InvalidOperationException("Jwt:Issuer, Jwt:Audience ve 1-15 dakika araliginda token suresi gereklidir.");
+                throw new InvalidOperationException("Jwt:Issuer, Jwt:Audience, 1-15 dakika access token ve 1-30 gun refresh token suresi gereklidir.");
             }
 
             // Yalnizca Development ortaminda anahtar verilmeden calisilabilir.
@@ -46,6 +46,7 @@ namespace UluBilge.App.Authentication
             var key = new SymmetricSecurityKey(keyBytes);
             services.AddSingleton(settings);
             services.AddSingleton(new SigningCredentials(key, SecurityAlgorithms.HmacSha256));
+            services.AddScoped<AuthTokenService>();
 
             services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
             {
@@ -79,7 +80,15 @@ namespace UluBilge.App.Authentication
                     context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                     _ => new FixedWindowRateLimiterOptions
                     {
-                        PermitLimit = 5,
+                        PermitLimit = 10,
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueLimit = 0
+                    }));
+                options.AddPolicy("auth-refresh", context => RateLimitPartition.GetFixedWindowLimiter(
+                    context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 30,
                         Window = TimeSpan.FromMinutes(1),
                         QueueLimit = 0
                     }));

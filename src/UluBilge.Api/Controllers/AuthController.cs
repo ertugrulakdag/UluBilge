@@ -9,11 +9,10 @@ using UluBilge.App.Queries.AuthHandler;
 namespace UluBilge.Api.Controllers;
 
 [ApiController]
-[Route("v1/Auth")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class AuthController : BaseController
 {
-    [HttpPost("login")]
+    [HttpPost]
     [AllowAnonymous]
     [EnableRateLimiting("auth-login")]
     [RequestSizeLimit(4096)]
@@ -25,7 +24,19 @@ public sealed class AuthController : BaseController
             : Ok(new BaseResponse<LoginAsync.Result>(result));
     }
 
-    [HttpGet("me")]
+    [HttpPost()]
+    [AllowAnonymous]
+    [EnableRateLimiting("auth-refresh")]
+    [RequestSizeLimit(4096)]
+    public async Task<ActionResult<BaseResponse<LoginAsync.Result>>> RefreshTokenAsync([FromBody, Required(ErrorMessage = "Istek govdesi zorunludur.")] RefreshTokenAsync.Command command, CancellationToken ct)
+    {
+        var result = await AsyncCommandHandler<RefreshTokenAsync.Command, LoginAsync.Result?>().HandleAsync(command, ct);
+        return result is null
+            ? Unauthorized(new ProblemDetails { Status = 401, Title = "Refresh token gecersiz veya suresi dolmus." })
+            : Ok(new BaseResponse<LoginAsync.Result>(result));
+    }
+
+    [HttpGet]
     [Authorize]
     public async Task<ActionResult<BaseResponse<MeAsync.Result>>> Me(CancellationToken ct)
     {

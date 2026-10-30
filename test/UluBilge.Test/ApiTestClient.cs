@@ -17,7 +17,7 @@ internal sealed class ApiTestClient : IDisposable
 
     public async Task<LoginAsync.Result> LoginAsync()
     {
-        using var response = await Client.PostAsJsonAsync("/v1/Auth/login", new
+        using var response = await Client.PostAsJsonAsync("/v1/Auth/Login", new
         {
             userName = Environment.GetEnvironmentVariable("ULUBILGE_TEST_USERNAME") ?? "admin",
             password = Environment.GetEnvironmentVariable("ULUBILGE_TEST_PASSWORD") ?? "admin"

@@ -1,10 +1,7 @@
 using System.ComponentModel.DataAnnotations;
-using System.Globalization;
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
-using Microsoft.IdentityModel.JsonWebTokens;
-using Microsoft.IdentityModel.Tokens;
 using UluBilge.App.Authentication;
 using UluBilge.Core.Commands;
 using UluBilge.Core.Entities;
@@ -30,9 +27,11 @@ namespace UluBilge.App.Commands.AuthHandler
             public string TokenType { get; init; } = "Bearer";
             public int ExpiresIn { get; init; }
             public DateTimeOffset ExpiresAtUtc { get; init; }
+            public required string RefreshToken { get; init; }
+            public DateTimeOffset RefreshTokenExpiresAtUtc { get; init; }
         }
 
-        public sealed class Handler(IUserRepository userRepository, JwtOptions settings, SigningCredentials signingCredentials) : IAsyncCommandHandler<Command, Result?>
+        public sealed class Handler(IUserRepository userRepository, JwtOptions settings, AuthTokenService tokenService) : IAsyncCommandHandler<Command, Result?>
         {
             private static readonly PasswordHasher<User> Passwords = new(Options.Create(new PasswordHasherOptions { IterationCount = 210_000 }));
             private static readonly User DummyUser = new();
@@ -63,38 +62,8 @@ namespace UluBilge.App.Commands.AuthHandler
                 }
 
                 await userRepository.RecordSuccessfulLoginAsync(user, now, ct);
-                return CreateToken(user, now);
-            }
-
-            private Result CreateToken(User user, DateTime now)
-            {
-                var expiresAt = now.AddMinutes(settings.AccessTokenLifetimeMinutes);
-                var roles = Enum.GetValues<RoleEnum>()
-                    .Where(role => role != RoleEnum.None && user.RoleEnum.HasFlag(role))
-                    .Select(role => role.ToString()).ToArray();
-
-                var token = new JsonWebTokenHandler().CreateToken(new SecurityTokenDescriptor
-                {
-                    Issuer = settings.Issuer,
-                    Audience = settings.Audience,
-                    IssuedAt = now,
-                    NotBefore = now,
-                    Expires = expiresAt,
-                    SigningCredentials = signingCredentials,
-                    Claims = new Dictionary<string, object>
-                    {
-                        ["sub"] = user.Id.ToString(CultureInfo.InvariantCulture),
-                        ["name"] = user.UserName,
-                        [JwtOptions.RoleClaimType] = roles
-                    }
-                });
-
-                return new Result
-                {
-                    AccessToken = token,
-                    ExpiresIn = settings.AccessTokenLifetimeMinutes * 60,
-                    ExpiresAtUtc = new DateTimeOffset(expiresAt, TimeSpan.Zero)
-                };
+                var issued = await tokenService.IssueAsync(user, Guid.NewGuid(), now, now.AddDays(settings.RefreshTokenLifetimeDays), ct);
+                return issued.Result;
             }
 
             private static PasswordVerificationResult VerifyPassword(User? user, string password)

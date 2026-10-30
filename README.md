@@ -349,20 +349,23 @@ App projesindedir; API controller'i yalnizca command/query handler'larini cagiri
 
 | Dosya | Gorevi |
 | --- | --- |
-| `App/Commands/AuthHandler/LoginAsync.cs` | Kullanici/parola kontrolu ve JWT uretimi |
+| `App/Commands/AuthHandler/LoginAsync.cs` | Kullanici/parola kontrolu ve token ciftinin olusturulmasi |
+| `App/Commands/AuthHandler/RefreshTokenAsync.cs` | Refresh token dogrulamasi, rotasyon ve tekrar kullanimda iptal |
+| `App/Authentication/AuthTokenService.cs` | JWT ve rastgele refresh token uretimi |
 | `App/Queries/AuthHandler/MeAsync.cs` | Dogrulanmis token claimlerinden kullanici bilgisi |
 | `App/Authentication/JwtOptions.cs` | Issuer, audience, imzalama anahtari ve token suresi |
 | `App/Extensions/JwtServiceCollectionExtensions.cs` | JWT dogrulamasi ve servis kaydi |
 | `Api/Authentication/RoleAuthorizeAttribute.cs` | Standart rol claimleriyle coklu rol ve Debug davranisi |
 
-`POST /v1/Auth/login`, JSON govdesindeki `userName` ve `password` ile
+`POST /v1/Auth/Login`, JSON govdesindeki `userName` ve `password` ile
 `dbo.Users` tablosundaki kullaniciyi dogrular. Parolalar Identity PasswordHasher
 ile kontrol edilir. Bes hatali denemede hesap on bes dakika kilitlenir; ayrica
 IP basina dakikada bes giris denemesi kabul edilir.
 
-Basarili yanitin `data` nesnesi `accessToken`, `tokenType`, `expiresIn` ve
-`expiresAtUtc` alanlarini icerir. Tokeni `Authorization: Bearer <accessToken>`
-basligiyla gonderin. `GET /v1/Auth/me`, `data` icinde tokenin kullanici numarasi,
+Basarili yanitin `data` nesnesi `accessToken`, `tokenType`, `expiresIn`,
+`expiresAtUtc`, `refreshToken` ve `refreshTokenExpiresAtUtc` alanlarini icerir.
+Tokeni `Authorization: Bearer <accessToken>` basligiyla gonderin.
+`GET /v1/Auth/Me`, `data` icinde tokenin kullanici numarasi,
 adi ve rolunu dondurur; kullanicinin aktiflik bilgisi veritabanindan okunur.
 Parola tokena yazilmaz; token URL veya cookie uzerinden alinmaz.
 
@@ -373,24 +376,50 @@ istekte veritabanina gitmez. Release derlemesinde gecersiz token 401, yetersiz r
 403 sonucunu verir. Onceki istek uzerine Debug derlemesinde `RoleAuthorize`
 kullanilan yerlerde anonim erisim devam eder.
 
-Ayarlar `Jwt:Issuer`, `Jwt:Audience`, `Jwt:AccessTokenLifetimeMinutes` ve
-`Jwt:SigningKeyBase64` alanlaridir. Signing key, en az 32 rastgele baytin Base64
+Ayarlar `Jwt:Issuer`, `Jwt:Audience`, `Jwt:AccessTokenLifetimeMinutes`,
+`Jwt:RefreshTokenLifetimeDays` ve `Jwt:SigningKeyBase64` alanlaridir.
+Signing key, en az 32 rastgele baytin Base64
 karsiligi olmalidir. Development disinda anahtar zorunludur; ortam degiskeni veya
 secret store uzerinden verin. Ornegin ortam degiskeni adi
 `Jwt__SigningKeyBase64` olur. Development'ta anahtar verilmezse surece ozel
 rastgele anahtar kullanilir; yeniden baslatmada onceki tokenlar gecersiz olur.
 HTTPS zorunlulugu Development disinda korunur.
 
-REST girisinde refresh token veya sunucu tarafli logout yoktur; bunlar MCP OAuth
-akisindan ayridir. Cikista REST istemcisi tokeni siler; suresi doldugunda yeniden
-giris yapilir. Kullanici kapatma, parola veya rol degisikligi mevcut REST tokenini aninda
-iptal etmez; en fazla token suresi ve saat toleransi sonunda etkili olur.
-Onceki tokenlarda farkli rol claim bicimi kullanildigi icin bu degisiklikten
-sonra yeniden giris yapilmalidir.
+Access token suresi doldugunda `POST /v1/Auth/RefreshToken` istegini su govdeyle gonderin;
+bu endpoint Bearer token gerektirmez:
 
-Kullanilmayan `UserToken` entity/repository kodu kaldirildi. Gecmis migration
-ve mevcut `UserTokens` tablosu, var olan verileri etkilememek icin silinmedi;
-sade giris akisi bu tabloyu kullanmaz.
+```json
+{
+  "refreshToken": "giris-veya-onceki-yenileme-yanitindaki-refreshToken"
+}
+```
+
+Yanit girisle ayni `data` alanlarini icerir. Her basarili yenilemeden sonra iki
+tokeni de yenileriyle degistirin. Refresh token 32 rastgele bayttan uretilir;
+`dbo.UserTokens` tablosunda yalnizca SHA-256 ozeti saklanir. Mevcut tablo semasi
+yeterlidir, yeni migration gerekmez. Varsayilan refresh token suresi ilk giristen
+itibaren 7 gundur; `Jwt:RefreshTokenLifetimeDays` ile 1-30 gun arasinda ayarlanir.
+Rotasyon bu son tarihi uzatmaz. API yeniden baslasa da refresh token kayitlari korunur.
+
+Yenileme ve eski tokenin tuketilmesi ayni transaction'dadir. Ayni kullaniciya ait
+token islemleri kullanici satiri kilidiyle siralanir. Kullanilmis bir tokenin
+tekrar gonderilmesi ilgili `FamilyId` zincirini iptal eder; diger girislerin
+zincirleri etkilenmez. Bu davranis [RFC 9700 rotasyon yaklasimini](https://www.rfc-editor.org/rfc/rfc9700.html#section-4.14.2)
+izler. Yenileme isteklerini istemcide sirayla gonderin; es zamanli ayni token
+kullanimi da tekrar kullanim sayilir ve yeniden giris gerektirir.
+
+Gecersiz, suresi dolmus veya iptal edilmis token `401`, eksik veya bozuk bicimli
+govde `400` doner. IP basina dakikada 30 yenileme istegi kabul edilir.
+Yenilemede kullanicinin aktifligi, kilit durumu ve guncel rolleri veritabanindan
+okunur. Sunucu tarafli REST logout endpoint'i yoktur. Parola/SecurityStamp
+degisikliginde token zincirlerini iptal etmek icin ilgili islemde `UserTokens`
+kayitlari da iptal edilmelidir. Zincir iptali mevcut access tokeni aninda iptal
+etmez; access token kendi suresi ve saat toleransi boyunca kullanilabilir.
+REST refresh tokenlari ile MCP OAuth refresh tokenlari ayri akislardir.
+
+Bruno koleksiyonunda `AuthController` altinda **Login → RefreshToken → Me**
+sirasi kullanilabilir. Login ve RefreshToken, `accessToken` ve `refreshToken`
+ortam degiskenlerini otomatik gunceller.
 
 ## Yeni özellik ekleme
 

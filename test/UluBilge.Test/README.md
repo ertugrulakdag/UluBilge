@@ -22,7 +22,7 @@ $env:ULUBILGE_TEST_USERNAME = "admin"
 $env:ULUBILGE_TEST_PASSWORD = "admin"
 ```
 
-- `AuthControllerTests`: Giriş, geçersiz/boş bilgiler, token ile kullanıcı bilgisi ve eksik/geçersiz token kontrolü.
+- `AuthControllerTests`: Giriş, geçersiz/boş bilgiler, token ile kullanıcı bilgisi, refresh token rotasyonu, tekrar kullanımda zincirin iptali, eşzamanlı yenileme ve eksik/geçersiz token kontrolü. Giriş `/v1/Auth/Login`, kullanıcı bilgisi `/v1/Auth/Me`, yenileme `/v1/Auth/RefreshToken` adresindedir. Testler `UserTokens` tablosuna oturum kayıtları ekler.
 - `RegionControllerTests`: Tek test içinde **ekle → güncelle → listele → ID ile getir → sil** sırası izlenir. Sonrasında ID ile sorgulama `404` dönmelidir. Bir adım başarısız olursa testin oluşturduğu kayıt yine API üzerinden silinir.
 - `ApiTestClient`: API adresini, giriş işlemini ve HTTP istemcisini içerir.
 
