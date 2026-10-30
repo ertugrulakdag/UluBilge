@@ -8,7 +8,7 @@ using UluBilge.Core.Enums;
 
 namespace UluBilge.Api.Controllers
 {
-    [RoleAuthorize(RoleEnum.Admin)]//TODO:Birden fazla rol alabilmeli. Örn: Admin,User
+    [RoleAuthorize(RoleEnum.Admin, RoleEnum.Region)]
     public sealed class RegionController : BaseController
     {
         [HttpGet("{id:int}")]

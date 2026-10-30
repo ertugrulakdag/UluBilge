@@ -4,11 +4,11 @@ using UluBilge.Core.Enums;
 namespace UluBilge.Api.Authentication
 {
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = true)]
-    public sealed class RoleAuthorizeAttribute(RoleEnum roles) : AuthorizeAttribute, IAuthorizationRequirementData
+    public sealed class RoleAuthorizeAttribute(params RoleEnum[] roles) : AuthorizeAttribute, IAuthorizationRequirementData
     {
         public IEnumerable<IAuthorizationRequirement> GetRequirements()
         {
-            yield return new RoleRequirement(roles);
+            yield return new RoleRequirement(roles.Aggregate(RoleEnum.None, (mask, role) => mask | role));
         }
     }
 
@@ -22,7 +22,7 @@ namespace UluBilge.Api.Authentication
                 && requirement.Roles != RoleEnum.None
                 && AuthenticationClaims.IsSupportedRole(requirement.Roles)
                 && AuthenticationClaims.TryGetRole(context.User, out var roles)
-                && (roles & requirement.Roles) == requirement.Roles)
+                && (roles & requirement.Roles) != RoleEnum.None)
             {
                 context.Succeed(requirement);
             }

@@ -11,10 +11,10 @@ namespace UluBilge.Core.Enums
         [Description("Admin")]
         Admin = 1,
 
-        [Description("xxx")]
-        Xxx = 2,
+        [Description("Raporlama")]
+        Report = 2,
 
-        [Description("yyy")]
-        Yyy = 4,
+        [Description("Region")]
+        Region = 4,
     }
 }

@@ -18,4 +18,8 @@
     <ProjectReference Include="..\UluBilge.App\UluBilge.App.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="MCP\Tools\" />
+  </ItemGroup>
+
 </Project>
