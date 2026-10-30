@@ -1,8 +1,11 @@
 using Scalar.AspNetCore;
+using UluBilge.Api.Authentication;
 using UluBilge.Api.Exceptions;
 using UluBilge.Api.Extentions;
 using UluBilge.Api.Localization;
+using UluBilge.Api.MCP.Tools;
 using UluBilge.Api.OpenApi;
+using UluBilge.Core.Enums;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -19,6 +22,12 @@ builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = 
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddUluBilgeServices(builder.Configuration);
 builder.Services.AddApiAuthentication(builder.Configuration, builder.Environment);
+builder.Services.AddMcpServer()
+    .WithHttpTransport()
+    .WithToolsFromAssembly(typeof(ProductSalesReportTool).Assembly);
+/*AddMcpServer(): MCP servislerini kaydeder.
+WithHttpTransport(): HTTP üzerinden iletişimi etkinleştirir.
+WithToolsFromAssembly: İlgili assembly’deki bütün MCP toollarını bulup kaydeder.*/
 
 var app = builder.Build();
 
@@ -44,6 +53,7 @@ if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi().AllowAnonymous();
     app.MapScalarApiReference("/docs", options => options.WithTitle("UluBilge API").AddPreferredSecuritySchemes("Bearer")).AllowAnonymous();
+    /*/mcp adresini açar ve bu adresten sunulan bütün tool’lara Report/Admin erişim şartını uygular.*/
 }
 
 app.UseHttpsRedirection();
@@ -53,6 +63,8 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapMcp("/mcp")
+    .RequireAuthorization(new RoleAuthorizeAttribute(RoleEnum.Report, RoleEnum.Admin));
 
 app.Run();
 

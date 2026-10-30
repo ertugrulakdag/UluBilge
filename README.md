@@ -129,6 +129,27 @@ Yanıttaki `data.data` listesinde `productId`, `productName`, `totalQuantity`,
 hesaplanır; kargo bedeli dahil değildir. Eşit tutarlarda ürün numarasıyla sıralanır.
 Satışı olmayan ürünler listelenmez; eşleşen satış yoksa boş liste döner.
 
+## MCP ürün satış tool'u
+
+Streamable HTTP MCP sunucusu `/mcp` adresindedir. `get_product_sales` tool'u,
+`ReportController.GetProductSalesAsync` ile aynı Query handler'ı ve yanıt modelini
+kullanır. `year` ve `topCount` isteğe bağlıdır; `topCount` gönderilmezse veya null
+ise 10 kullanılır. Sonuç MCP `structuredContent` alanında `data.data` listesiyle
+döner. Geçersiz yıl veya ürün sayısı, açıklamasıyla birlikte MCP tool hatası döndürür.
+
+Örnek `tools/call` parametreleri:
+
+```json
+{
+  "name": "get_product_sales",
+  "arguments": { "year": 1997, "topCount": 10 }
+}
+```
+
+Release derlemelerinde MCP adresi de Bearer token ve `Report` veya `Admin`
+rollerinden birini gerektirir. Debug derlemelerinde mevcut `RoleAuthorize`
+davranışıyla anonim erişilebilir.
+
 ## JWT ve mock giriş
 
 Yerel geliştirmede `admin` kullanıcı adı ve `admin` parolasıyla giriş yapılabilir:
