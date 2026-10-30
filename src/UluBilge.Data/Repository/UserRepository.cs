@@ -17,7 +17,7 @@ namespace UluBilge.Data.Repository
                 SelectUser + " WHERE NormalizedUserName = @NormalizedUserName;",
                 new { NormalizedUserName = normalizedUserName }, unitOfWork.Transaction, cancellationToken: cancellationToken));
 
-        public Task<User?> GetByUserId(int userId, CancellationToken cancellationToken = default)
+        public Task<User?> GetByUserIdAsync(int userId, CancellationToken cancellationToken = default)
         {
             const string sql = @"
                 SELECT Id, UserName, NormalizedUserName, PasswordHash, Email, EmailConfirmed,
@@ -25,7 +25,7 @@ namespace UluBilge.Data.Repository
                        CreatedAtUtc, UpdatedAtUtc, LastLoginAtUtc, IsActive
                 FROM dbo.Users
                 WHERE Id = @UserId;";
-            return unitOfWork.Connection.QuerySingleOrDefaultAsync<User>(new CommandDefinition(sql, new { UserId = userId }, cancellationToken: cancellationToken));
+            return unitOfWork.Connection.QuerySingleOrDefaultAsync<User>(new CommandDefinition(sql, new { UserId = userId }, unitOfWork.Transaction, cancellationToken: cancellationToken));
         }
 
         public async Task RecordFailedLoginAsync(int userId, int accessFailedCount, DateTime? lockoutEndUtc, DateTime now, CancellationToken cancellationToken = default)
@@ -48,6 +48,6 @@ namespace UluBilge.Data.Repository
                 WHERE Id = @Id;";
             await unitOfWork.Connection.ExecuteAsync(new CommandDefinition(sql,
                 new { user.Id, user.PasswordHash, Now = now }, unitOfWork.Transaction, cancellationToken: cancellationToken));
-        } 
+        }
     }
 }
