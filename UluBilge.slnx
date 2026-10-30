@@ -1,4 +1,7 @@
 <Solution>
+  <Folder Name="/SolutionItems/">
+    <File Path="README.md" />
+  </Folder>
   <Project Path="src/UluBilge.Api/UluBilge.Api.csproj" />
   <Project Path="src/UluBilge.App/UluBilge.App.csproj" />
   <Project Path="src/UluBilge.Core/UluBilge.Core.csproj" />

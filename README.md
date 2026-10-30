@@ -1,8 +1,6 @@
 # UluBilge
 
-.NET 10, SQL Server Northwind ve Dapper kullanan CQRS API. SitePanosu'nun katman,
-Command/Query, handler ve controller düzenini izler. ERT.Core, ERT.BackgroundJob ve
-ERT.Profiling bağımlılıkları yoktur.
+.NET 10, SQL Server Northwind ve Dapper kullanan CQRS API. Command/Query, handler ve controller düzenini izler.
 
 ## Katmanlar
 
