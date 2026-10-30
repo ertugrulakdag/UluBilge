@@ -15,9 +15,15 @@ namespace UluBilge.Data.Database
 
         public DbTransaction? Transaction => _transaction;
 
-        public Task<TResult> ExecuteQueryAsync<TResult>(Func<CancellationToken, Task<TResult>> action, CancellationToken cancellationToken = default) => ExecuteAsync(action, isCommand: false, cancellationToken);
+        public Task<TResult> ExecuteQueryAsync<TResult>(Func<CancellationToken, Task<TResult>> action, CancellationToken cancellationToken = default)
+        {
+            return ExecuteAsync(action, isCommand: false, cancellationToken);
+        }
 
-        public Task<TResult> ExecuteCommandAsync<TResult>(Func<CancellationToken, Task<TResult>> action, CancellationToken cancellationToken = default) => ExecuteAsync(action, isCommand: true, cancellationToken);
+        public Task<TResult> ExecuteCommandAsync<TResult>(Func<CancellationToken, Task<TResult>> action, CancellationToken cancellationToken = default)
+        {
+            return ExecuteAsync(action, isCommand: true, cancellationToken);
+        }
 
         private async Task<TResult> ExecuteAsync<TResult>(Func<CancellationToken, Task<TResult>> action, bool isCommand, CancellationToken cancellationToken)
         {

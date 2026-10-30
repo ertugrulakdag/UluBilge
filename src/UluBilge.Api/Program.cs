@@ -5,6 +5,7 @@ using UluBilge.Api.Extentions;
 using UluBilge.Api.Localization;
 using UluBilge.Api.MCP.Tools;
 using UluBilge.Api.OpenApi;
+using UluBilge.App.Extensions;
 using UluBilge.Core.Enums;
 
 var builder = WebApplication.CreateBuilder(args);

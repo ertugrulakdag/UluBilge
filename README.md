@@ -152,22 +152,27 @@ davranışıyla anonim erişilebilir.
 
 ## JWT ve kullanici girisi
 
-Kimlik dogrulama yapisi `Authentication` klasorunde uc dosyadan olusur:
+Giris ve token islemleri App katmanindadir. `JwtBearer` paket referansi da
+App projesindedir; API controller'i yalnizca command/query handler'larini cagirir.
 
 | Dosya | Gorevi |
 | --- | --- |
-| `AuthService.cs` | Kullanici/parola kontrolu, JWT uretimi ve yanit modelleri |
-| `JwtOptions.cs` | Issuer, audience, imzalama anahtari ve token suresi |
-| `RoleAuthorizeAttribute.cs` | Standart rol claimleriyle coklu rol ve Debug davranisi |
+| `App/Commands/AuthHandler/LoginAsync.cs` | Kullanici/parola kontrolu ve JWT uretimi |
+| `App/Queries/AuthHandler/MeAsync.cs` | Dogrulanmis token claimlerinden kullanici bilgisi |
+| `App/Authentication/JwtOptions.cs` | Issuer, audience, imzalama anahtari ve token suresi |
+| `App/Extensions/JwtServiceCollectionExtensions.cs` | JWT dogrulamasi ve servis kaydi |
+| `Api/Authentication/RoleAuthorizeAttribute.cs` | Standart rol claimleriyle coklu rol ve Debug davranisi |
 
 `POST /v1/Auth/login`, JSON govdesindeki `userName` ve `password` ile
 `dbo.Users` tablosundaki kullaniciyi dogrular. Parolalar Identity PasswordHasher
 ile kontrol edilir. Bes hatali denemede hesap on bes dakika kilitlenir; ayrica
 IP basina dakikada bes giris denemesi kabul edilir.
 
-Basarili yanit `accessToken`, `tokenType`, `expiresIn` ve `expiresAtUtc` alanlarini
-icerir. Tokeni `Authorization: Bearer <accessToken>` basligiyla gonderin.
-`GET /v1/Auth/me`, token icindeki kullanici numarasi, adi ve rolunu dondurur.
+Basarili yanitin `data` nesnesi `accessToken`, `tokenType`, `expiresIn` ve
+`expiresAtUtc` alanlarini icerir. Tokeni `Authorization: Bearer <accessToken>`
+basligiyla gonderin. `GET /v1/Auth/me`, `data` icinde tokenin kullanici numarasi,
+adi ve rolunu dondurur. `MeAsync.Query`, `RequiresDatabase = false` ile
+veritabanina baglanmadan calisir; diger query'lerde varsayilan deger `true`'dur.
 Parola tokena yazilmaz; token URL veya cookie uzerinden alinmaz.
 
 JWT'nin HS256 imzasi, issuer, audience ve gecerlilik suresi yerlesik JwtBearer
@@ -206,5 +211,6 @@ public handler'lar ile `UluBilge.Data.Repository` namespace'i altındaki public
 repository'ler otomatik kaydedilir. Doğrulama, bağlantı seçimi ve transaction
 decorator'larla uygulanır. Kayıt kuralları API projesindeki
 `Extentions/ApplicationServiceCollectionExtensions.cs` dosyasındadır; `Program.cs`
-içinden `AddUluBilgeServices` ile çağrılır. JWT yapılandırması aynı klasördeki
-`JwtServiceCollectionExtensions.cs` üzerinden `AddApiAuthentication` ile yapılır.
+içinden `AddUluBilgeServices` ile çağrılır. JWT yapılandırması App projesindeki
+`Extensions/JwtServiceCollectionExtensions.cs` üzerinden `AddApiAuthentication`
+ile yapılır.

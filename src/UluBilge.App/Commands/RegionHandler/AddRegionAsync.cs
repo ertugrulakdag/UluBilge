@@ -23,7 +23,7 @@ namespace UluBilge.App.Commands.RegionHandler
             public int RegionId { get; init; }
         }
 
-        public sealed class HandlerAsync(IRegionRepository regionRepository) : IAsyncCommandHandler<Command, Result>
+        public sealed class Handler(IRegionRepository regionRepository) : IAsyncCommandHandler<Command, Result>
         {
             public async Task<Result> HandleAsync(Command command, CancellationToken ct = default)
             {
