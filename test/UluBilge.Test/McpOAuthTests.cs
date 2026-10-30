@@ -39,6 +39,45 @@ public sealed class McpOAuthTests
     }
 
     [Test]
+    public async Task Local_desktop_client_can_authorize_and_use_mcp_with_pkce_in_development()
+    {
+        var form = await host.FormAsync(clientId: OAuthTestApp.LocalClientId, redirectUri: OAuthTestApp.LocalRedirectUri);
+        Assert.That(form.Response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var login = await host.LoginAsync(form);
+        Assert.That(login.StatusCode, Is.EqualTo(HttpStatusCode.Redirect));
+        Assert.That(login.Headers.Location!.GetLeftPart(UriPartial.Path), Is.EqualTo(OAuthTestApp.LocalRedirectUri));
+        var code = QueryHelpers.ParseQuery(login.Headers.Location.Query)["code"].ToString();
+        var exchange = await host.ExchangeAsync(code, form.Verifier, clientId: OAuthTestApp.LocalClientId,
+            redirectUri: OAuthTestApp.LocalRedirectUri);
+        Assert.That(exchange.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var tokens = await OAuthTestApp.JsonAsync(exchange);
+        Assert.That((await host.McpAsync(tokens.GetProperty("access_token").GetString())).IsSuccessStatusCode, Is.True);
+        Assert.That((await host.RefreshAsync(tokens.GetProperty("refresh_token").GetString()!,
+            clientId: OAuthTestApp.LocalClientId)).StatusCode, Is.EqualTo(HttpStatusCode.OK));
+    }
+
+    [TestCase("http://192.168.1.10:3334/oauth/callback")]
+    [TestCase("http://example.com/oauth/callback")]
+    [TestCase("http://localhost:3334/oauth/callback")]
+    [TestCase("http://127.0.0.1:3334/oauth/callback#fragment")]
+    public async Task Development_desktop_client_rejects_non_loopback_ip_or_fragment_redirects(string redirect)
+    {
+        await using var invalid = new OAuthTestApp(localRedirectUri: redirect);
+        Assert.ThrowsAsync<InvalidOperationException>(() => invalid.StartAsync());
+    }
+
+    [Test]
+    public async Task Production_does_not_register_development_desktop_client()
+    {
+        await using var production = new OAuthTestApp(production: true);
+        await production.StartAsync();
+        var form = await production.FormAsync(clientId: OAuthTestApp.LocalClientId, redirectUri: OAuthTestApp.LocalRedirectUri);
+        Assert.That(form.Response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That(form.Response.Headers.Location, Is.Null);
+        Assert.That(production.Work.Commands, Is.Zero);
+    }
+
+    [Test]
     public async Task Consent_form_encodes_state_and_requires_csrf()
     {
         var form = await host.FormAsync(state: "\"><script>alert(1)</script>");
@@ -48,6 +87,26 @@ public sealed class McpOAuthTests
         Assert.That(form.Response.Headers.CacheControl?.NoStore, Is.True);
         Assert.That((await host.LoginAsync(form, csrf: false)).StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
         Assert.That(host.Work.Commands, Is.Zero);
+    }
+
+    [TestCase(OAuthTestApp.ClientId, OAuthTestApp.RedirectUri)]
+    [TestCase("ulubilge-claude", "https://claude.ai/api/mcp/auth_callback")]
+    [TestCase(OAuthTestApp.LocalClientId, OAuthTestApp.LocalRedirectUri)]
+    public async Task Login_form_csp_allows_only_self_and_the_validated_clients_callback_origin(string clientId, string redirectUri)
+    {
+        var form = await host.FormAsync(clientId: clientId, redirectUri: redirectUri);
+        Assert.That(form.Response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var policy = form.Response.Headers.GetValues("Content-Security-Policy").Single();
+        var formAction = policy.Split(';', StringSplitOptions.TrimEntries).Single(value => value.StartsWith("form-action "));
+        Assert.That(formAction.Split(' ', StringSplitOptions.RemoveEmptyEntries), Is.EqualTo(new[]
+        {
+            "form-action", "'self'", new Uri(redirectUri).GetLeftPart(UriPartial.Authority)
+        }));
+        Assert.That(policy, Does.Contain("default-src 'none'").And.Contain("frame-ancestors 'none'").And.Contain("base-uri 'none'"));
+
+        var failedLogin = await host.LoginAsync(form, password: "wrong-password");
+        Assert.That(failedLogin.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+        Assert.That(failedLogin.Headers.GetValues("Content-Security-Policy").Single(), Is.EqualTo(policy));
     }
 
     [Test]

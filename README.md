@@ -244,6 +244,43 @@ Parolaları ve mevcut `Jwt:SigningKeyBase64` değerini secret store veya ortam
 değişkeni üzerinden verin. Sertifikalar, yerel HTTPS geliştirme sertifikasından
 ayrıdır ve kaynak koduna eklenmez.
 
+### Claude Desktop ile yerel debug
+
+Claude Desktop'ta **Settings → Developer → Edit config** ile açılan yerel MCP
+yapılandırması kullanılır. Bağlantı `Claude Desktop → mcp-remote →
+https://localhost:7187/mcp` şeklindedir. API Visual Studio'da **https** profiliyle
+F5 kullanılarak başlatılır; köprü ayrı bir API başlatmaz, çalışan debug sürecine
+bağlanır.
+
+Node.js ve `mcp-remote` köprüsü her geliştirme bilgisayarında ayrıca kurulur.
+Yerel kurulum `mcp-remote` 0.15.2 kullanır. Claude yapılandırmasındaki
+`mcpServers.ulubilge-local` kaydı, Node.js ile köprünün `dist/proxy.js` dosyasını
+başlatır. Köprüye `--host 127.0.0.1`, `--transport http-only`,
+`--resource https://localhost:7187/mcp` ve sabit callback portu `3334` verilir.
+`--static-oauth-client-info` dosyası `ulubilge-claude-local` istemcisini,
+`--static-oauth-client-metadata` dosyası `mcp:tools offline_access` kapsamını ve
+`token_endpoint_auth_method: none` değerini belirtir.
+
+HTTPS geliştirme sertifikasının yalnızca açık PEM kopyası `NODE_EXTRA_CA_CERTS`
+ile Node.js'e tanıtılır. Claude yapılandırmasını değiştirirken mevcut
+`preferences` ve diğer alanları koruyun. Microsoft Store kurulumunda bu dosya
+uygulamanın `LocalCache/Roaming/Claude` dizininde olabilir. Kurulum dosyaları
+ve Claude kaydındaki tam yollar makineye özeldir; kaynak koduna eklenmez.
+
+`OAuth:DevelopmentClients` yalnızca Development ortamında kaydedilir. Yerel
+istemci `ulubilge-claude-local`, tam dönüş adresi
+`http://127.0.0.1:3334/oauth/callback` kullanır; köprü bu portu dinler. HTTP dönüş
+adreslerine yalnızca Development ortamında ve loopback IP üzerinde izin verilir.
+API'nin `/mcp` adresi HTTPS ve OAuth, PKCE, scope ve rol denetimlerini kullanmaya
+devam eder.
+
+API'yi yeniden başlattıktan sonra Claude Desktop'ı tamamen kapatıp açın. İlk
+bağlantıda açılan tarayıcı formunda UluBilge kullanıcısıyla giriş yapıp izin verin;
+kullanıcının Report veya Admin rolü olmalıdır. Sonra Claude'dan `get_product_sales`
+aracını kullanmasını isteyin. API yeniden başlatıldığında geçici anahtarlar da
+değişir; bağlantıyı yeniden doğrulamak gerekebilir. Köprü dosyaları, sertifika
+kopyası ve OAuth oturumu `.local` altında tutulur ve Git'e eklenmez.
+
 OAuth güvenlik testleri `dotnet test test/UluBilge.Test -c Release --filter FullyQualifiedName~McpOAuthTests` ile çalışır.
 Gerçek Northwind bağlantısı kullanılmadan PKCE, callback, CSRF, token bağlamları,
 refresh tekrar kullanımı ve rol denetimleri kontrol edilir.

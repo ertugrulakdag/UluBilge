@@ -29,12 +29,14 @@ using UluBilge.Data.Abstract;
 
 namespace UluBilge.Test;
 
-internal sealed class OAuthTestApp(bool production = false) : IAsyncDisposable
+internal sealed class OAuthTestApp(bool production = false, string? localRedirectUri = null) : IAsyncDisposable
 {
     public const string ServerUrl = "https://localhost:7187";
     public const string Resource = ServerUrl + "/mcp";
     public const string ClientId = "ulubilge-chatgpt";
     public const string RedirectUri = "https://chatgpt.com/connector_platform_oauth_redirect";
+    public const string LocalClientId = "ulubilge-claude-local";
+    public const string LocalRedirectUri = "http://127.0.0.1:3334/oauth/callback";
     public const string Password = "test-password-123";
     private readonly string directory = Path.Combine(Path.GetTempPath(), "UluBilge.OAuthTests." + Guid.NewGuid().ToString("N"));
     private WebApplication app = null!;
@@ -64,7 +66,10 @@ internal sealed class OAuthTestApp(bool production = false) : IAsyncDisposable
             ["OAuth:Clients:0:ClientId"] = ClientId, ["OAuth:Clients:0:DisplayName"] = "ChatGPT",
             ["OAuth:Clients:0:RedirectUris:0"] = RedirectUri,
             ["OAuth:Clients:1:ClientId"] = "ulubilge-claude", ["OAuth:Clients:1:DisplayName"] = "Claude",
-            ["OAuth:Clients:1:RedirectUris:0"] = "https://claude.ai/api/mcp/auth_callback"
+            ["OAuth:Clients:1:RedirectUris:0"] = "https://claude.ai/api/mcp/auth_callback",
+            ["OAuth:DevelopmentClients:0:ClientId"] = LocalClientId,
+            ["OAuth:DevelopmentClients:0:DisplayName"] = "Claude Desktop (local tests)",
+            ["OAuth:DevelopmentClients:0:RedirectUris:0"] = localRedirectUri ?? LocalRedirectUri
         });
         if (production)
         {

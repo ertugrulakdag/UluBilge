@@ -365,3 +365,6 @@ FodyWeavers.xsd
 # OAuth token veritabani ve ozel sertifikalar
 /src/UluBilge.Api/App_Data/
 /src/UluBilge.Api/certificates/
+
+# Yerel MCP koprusu, sertifika kopyasi ve OAuth oturumu
+/.local/

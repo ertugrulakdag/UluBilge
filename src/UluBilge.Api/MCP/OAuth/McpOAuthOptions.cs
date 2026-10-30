@@ -14,6 +14,7 @@ public sealed class McpOAuthOptions
     public string? EncryptionCertificatePath { get; set; }
     public string? EncryptionCertificatePassword { get; set; }
     public List<McpOAuthClient> Clients { get; set; } = [];
+    public List<McpOAuthClient> DevelopmentClients { get; set; } = [];
 
     public Uri Issuer => new(ServerUrl.TrimEnd('/') + "/");
     public Uri Resource => new(Issuer, "mcp");

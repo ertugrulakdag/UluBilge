@@ -15,6 +15,7 @@ public static partial class McpOAuthExtensions
     public static IServiceCollection AddMcpOAuth(this IServiceCollection services, IConfiguration configuration, IWebHostEnvironment environment)
     {
         var settings = configuration.GetSection("OAuth").Get<McpOAuthOptions>() ?? new();
+        if (environment.IsDevelopment()) settings.Clients.AddRange(settings.DevelopmentClients);
         if (!Uri.TryCreate(settings.ServerUrl, UriKind.Absolute, out var url) || url.Scheme != Uri.UriSchemeHttps
             || url.AbsolutePath != "/" || !string.IsNullOrEmpty(url.Query) || !string.IsNullOrEmpty(url.Fragment)
             || !string.IsNullOrEmpty(url.UserInfo) || (!environment.IsDevelopment() && url.IsLoopback))
@@ -22,11 +23,10 @@ public static partial class McpOAuthExtensions
             throw new InvalidOperationException("OAuth:ServerUrl, /mcp içermeyen bir HTTPS kök adresi olmalıdır. Production adresi localhost olamaz.");
         }
         if (settings.Clients.Count == 0 || settings.Clients.Any(client => string.IsNullOrWhiteSpace(client.ClientId)
-            || client.RedirectUris.Count == 0 || client.RedirectUris.Any(value => !Uri.TryCreate(value, UriKind.Absolute, out var uri)
-                || uri.Scheme != Uri.UriSchemeHttps || !string.IsNullOrEmpty(uri.Fragment) || !string.IsNullOrEmpty(uri.UserInfo)))
+            || client.RedirectUris.Count == 0 || client.RedirectUris.Any(value => !IsAllowedRedirectUri(value, environment.IsDevelopment())))
             || settings.Clients.Select(client => client.ClientId).Distinct(StringComparer.Ordinal).Count() != settings.Clients.Count)
         {
-            throw new InvalidOperationException("OAuth istemcileri için benzersiz ClientId ve tam HTTPS RedirectUris adresleri gereklidir.");
+            throw new InvalidOperationException("OAuth istemcileri için benzersiz ClientId ve tam HTTPS RedirectUris adresleri gereklidir. Development ortamında HTTP loopback IP dönüş adreslerine de izin verilir.");
         }
 
         services.AddSingleton(settings);
@@ -155,6 +155,15 @@ public static partial class McpOAuthExtensions
         app.MapGet("/oauth/authorize", AuthorizeAsync).AllowAnonymous().ExcludeFromDescription();
         app.MapPost("/oauth/authorize", AuthorizeAsync).AllowAnonymous().RequireRateLimiting("auth-login").ExcludeFromDescription();
         app.MapPost("/oauth/token", ExchangeAsync).AllowAnonymous().RequireRateLimiting("oauth-token").ExcludeFromDescription();
+    }
+
+    private static bool IsAllowedRedirectUri(string value, bool development)
+    {
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) || !string.IsNullOrEmpty(uri.Fragment)
+            || !string.IsNullOrEmpty(uri.UserInfo)) return false;
+
+        return uri.Scheme == Uri.UriSchemeHttps || (development && uri.Scheme == Uri.UriSchemeHttp
+            && uri.IsLoopback && uri.HostNameType is UriHostNameType.IPv4 or UriHostNameType.IPv6);
     }
 
     private static X509Certificate2 LoadCertificate(string? path, string? password, IWebHostEnvironment environment)

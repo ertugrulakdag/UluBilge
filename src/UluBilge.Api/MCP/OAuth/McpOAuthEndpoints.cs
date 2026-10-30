@@ -138,7 +138,10 @@ public static partial class McpOAuthExtensions
     {
         context.Response.Headers.CacheControl = "no-store";
         context.Response.Headers.Pragma = "no-cache";
-        context.Response.Headers.ContentSecurityPolicy = "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
+        // OpenIddict tam redirect_uri degerini bu handler'dan once dogrular.
+        // Chromium form POST'unun ardindaki OAuth yonlendirmesini de CSP ile denetler.
+        var callbackOrigin = new Uri(request.RedirectUri!, UriKind.Absolute).GetLeftPart(UriPartial.Authority);
+        context.Response.Headers.ContentSecurityPolicy = $"default-src 'none'; style-src 'unsafe-inline'; form-action 'self' {callbackOrigin}; frame-ancestors 'none'; base-uri 'none'";
         context.Response.Headers["Referrer-Policy"] = "no-referrer";
         context.Response.Headers.XContentTypeOptions = "nosniff";
         var csrf = antiforgery.GetAndStoreTokens(context);
