@@ -40,9 +40,7 @@ builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = 
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddUluBilgeServices(builder.Configuration);
 builder.Services.AddApiAuthentication(builder.Configuration, builder.Environment);
-builder.Services.AddMcpServer()
-    .WithHttpTransport()
-    .WithToolsFromAssembly(typeof(ProductSalesReportTool).Assembly);
+builder.Services.AddMcpServer().WithHttpTransport().WithToolsFromAssembly(typeof(ProductSalesReportTool).Assembly);
 //AddMcpServer(): MCP servislerini kaydeder.WithHttpTransport(): HTTP üzerinden iletişimi etkinleştirir.WithToolsFromAssembly: İlgili assembly’deki bütün MCP toollarını bulup kaydeder.
 
 var app = builder.Build();
