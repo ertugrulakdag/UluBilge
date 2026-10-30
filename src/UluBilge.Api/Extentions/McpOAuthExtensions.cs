@@ -15,6 +15,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
+using ModelContextProtocol.AspNetCore;
 using ModelContextProtocol.AspNetCore.Authentication;
 using UluBilge.App.Authentication;
 using UluBilge.App.Commands.AuthHandler;
@@ -189,6 +190,16 @@ namespace UluBilge.Api.Extentions
 
             app.MapMcp("/mcp").RequireAuthorization("McpOAuth");
             // MCP icin token, kapsam ve Report/Admin rolu her derlemede zorunludur.
+
+            if (app.Services.GetRequiredService<IOptions<HttpServerTransportOptions>>().Value.SessionMode == HttpServerSessionMode.Stateless)
+            {
+                // SDK bu metotları eşlemez; genel REST JWT kuralının yanlışlıkla 401 üretmesini önler.
+                app.MapMethods("/mcp", [HttpMethods.Get, HttpMethods.Delete], (HttpContext context) =>
+                {
+                    context.Response.Headers.Allow = HttpMethods.Post;
+                    return Results.StatusCode(StatusCodes.Status405MethodNotAllowed);
+                }).RequireAuthorization("McpOAuth").ExcludeFromDescription();
+            }
 
             return app;
 

@@ -170,6 +170,11 @@ döner. Geçersiz yıl veya ürün sayısı, açıklamasıyla birlikte MCP tool 
 MCP adresi bütün derlemelerde OAuth Bearer token, `mcp:tools` kapsamı ve `Report`
 veya `Admin` rollerinden birini gerektirir.
 
+HTTP transport varsayılan olarak stateless çalışır. Geçerli MCP token'ıyla gelen
+`GET /mcp` ve `DELETE /mcp` istekleri `405 Method Not Allowed` ve `Allow: POST`
+alır. Bu istekler de MCP policy'siyle doğrulanır; böylece genel REST JWT kuralı
+yanlış bir 401 üreterek `mcp-remote` köprüsünü tekrar girişe yönlendirmez.
+
 ## MCP OAuth: ChatGPT ve Claude
 
 OAuth servisleri, Minimal API endpoint'leri ve token yardımcıları API projesindeki
