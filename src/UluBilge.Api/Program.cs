@@ -26,9 +26,7 @@ builder.Services.AddApiAuthentication(builder.Configuration, builder.Environment
 builder.Services.AddMcpServer()
     .WithHttpTransport()
     .WithToolsFromAssembly(typeof(ProductSalesReportTool).Assembly);
-/*AddMcpServer(): MCP servislerini kaydeder.
-WithHttpTransport(): HTTP üzerinden iletişimi etkinleştirir.
-WithToolsFromAssembly: İlgili assembly’deki bütün MCP toollarını bulup kaydeder.*/
+//AddMcpServer(): MCP servislerini kaydeder.WithHttpTransport(): HTTP üzerinden iletişimi etkinleştirir.WithToolsFromAssembly: İlgili assembly’deki bütün MCP toollarını bulup kaydeder.
 
 var app = builder.Build();
 
@@ -64,7 +62,7 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapMcp("/mcp").RequireAuthorization(new RoleAuthorizeAttribute(RoleEnum.Report, RoleEnum.Admin));
-/*/mcp adresini açar ve bu adresten sunulan bütün tool’lara Report/Admin erişim şartını uygular.*/
+//mcp adresini açar ve bu adresten sunulan bütün tool’lara Report/Admin erişim şartını uygular.
 
 app.Run();
 
