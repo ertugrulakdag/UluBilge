@@ -1,14 +1,13 @@
 using System.Text.Json.Nodes;
 using Scalar.AspNetCore;
-using UluBilge.Api.Authentication;
 using UluBilge.Api.Exceptions;
 using UluBilge.Api.Extentions;
 using UluBilge.Api.Localization;
 using UluBilge.Api.MCP.Tools;
-using UluBilge.Api.OpenApi;
+using UluBilge.Api.MCP.OAuth;
 using UluBilge.App.Commands.AuthHandler;
 using UluBilge.App.Extensions;
-using UluBilge.Core.Enums;
+using UluBilge.Api.Authentication;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -18,8 +17,8 @@ builder.Services.AddControllers(TurkishApiMessages.ConfigureMvc)
 
 builder.Services.AddOpenApi(options =>
 {
-    options.AddDocumentTransformer<BearerSecuritySchemeTransformer>();
-    options.AddOperationTransformer<BearerSecuritySchemeTransformer>();
+    options.AddDocumentTransformer<BearerSecurityScheme>();
+    options.AddOperationTransformer<BearerSecurityScheme>();
     if (builder.Environment.IsDevelopment())
     {
         options.AddOperationTransformer((operation, context, _) =>
@@ -40,6 +39,7 @@ builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = 
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddUluBilgeServices(builder.Configuration);
 builder.Services.AddApiAuthentication(builder.Configuration, builder.Environment);
+builder.Services.AddMcpOAuth(builder.Configuration, builder.Environment);
 builder.Services.AddMcpServer().WithHttpTransport().WithToolsFromAssembly(typeof(ProductSalesReportTool).Assembly);
 //AddMcpServer(): MCP servislerini kaydeder.WithHttpTransport(): HTTP üzerinden iletişimi etkinleştirir.WithToolsFromAssembly: İlgili assembly’deki bütün MCP toollarını bulup kaydeder.
 
@@ -76,8 +76,9 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
-app.MapMcp("/mcp").RequireAuthorization(new RoleAuthorizeAttribute(RoleEnum.Report, RoleEnum.Admin));
-//mcp adresini açar ve bu adresten sunulan bütün tool’lara Report/Admin erişim şartını uygular.
+await app.MapMcpOAuthAsync();
+app.MapMcp("/mcp").RequireAuthorization(McpOAuthOptions.Policy);
+// MCP icin token, kapsam ve Report/Admin rolu her derlemede zorunludur.
 
 app.Run();
 

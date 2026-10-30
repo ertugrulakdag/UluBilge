@@ -28,7 +28,7 @@ namespace UluBilge.App.Queries.AuthHandler
                 {
                     throw new CustomException();
                 }
-                User? user = await userRepository.GetByUserIdAsync(12, ct);
+                User? user = await userRepository.GetByUserIdAsync(id, ct);
                 if (user is null)
                 {
                     throw new NotFoundException();

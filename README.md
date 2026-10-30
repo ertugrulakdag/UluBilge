@@ -167,9 +167,89 @@ döner. Geçersiz yıl veya ürün sayısı, açıklamasıyla birlikte MCP tool 
 }
 ```
 
-Release derlemelerinde MCP adresi de Bearer token ve `Report` veya `Admin`
-rollerinden birini gerektirir. Debug derlemelerinde mevcut `RoleAuthorize`
-davranışıyla anonim erişilebilir.
+MCP adresi bütün derlemelerde OAuth Bearer token, `mcp:tools` kapsamı ve `Report`
+veya `Admin` rollerinden birini gerektirir.
+
+## MCP OAuth: ChatGPT ve Claude
+
+`Program.cs` içinde iki kayıt vardır: `AddMcpOAuth` servisleri hazırlar,
+`MapMcpOAuthAsync` endpoint'leri ve onaylı istemcileri kaydeder. Yapı
+`MCP/OAuth` klasöründedir. OAuth protokol kontrollerini OpenIddict uygular;
+kullanıcı adı/parola doğrulaması mevcut `LoginAsync` command'ını kullanır.
+
+| Adres | Görevi |
+| --- | --- |
+| `/.well-known/oauth-protected-resource/mcp` | MCP kaynağını ve yetkilendirme sunucusunu bildirir |
+| `/.well-known/oauth-authorization-server` | OAuth endpoint'lerini, scope ve PKCE desteğini bildirir |
+| `/.well-known/openid-configuration` | Aynı keşif belgesinin OIDC adresi |
+| `GET /oauth/authorize` | İstemciyi doğrular; giriş ve izin formunu gösterir |
+| `POST /oauth/authorize` | Form güvenliğini ve kullanıcıyı doğrular; tek kullanımlık kod üretir |
+| `POST /oauth/token` | Kodu token ile değiştirir veya refresh token ile erişimi yeniler |
+| `/mcp` | OAuth token ile araçlara erişim sağlar |
+
+Akış: istemci keşif belgesini okur → kullanıcı giriş yapıp izin verir → istemci
+kodu PKCE `S256` doğrulamasıyla token'a çevirir → `/mcp` isteklerini
+`Authorization: Bearer ...` ile gönderir. `resource` değeri her iki OAuth isteğinde
+de keşif belgesindeki MCP adresiyle aynı olmalıdır.
+
+`appsettings.json` içindeki `OAuth:ServerUrl` başlangıçta `https://localhost:7187`.
+Kaynak adresi bunun sonuna `/mcp` eklenerek oluşur. İstemcileri eklerken:
+
+| İstemci | OAuth client ID | Tanımlı callback |
+| --- | --- | --- |
+| ChatGPT | `ulubilge-chatgpt` | `https://chatgpt.com/connector_platform_oauth_redirect` |
+| Claude | `ulubilge-claude` | `https://claude.ai/api/mcp/auth_callback` |
+
+ChatGPT veya Claude'un bağlantı ayarlarında **kendi OAuth istemcini kullan**
+seçeneğini ve ilgili client ID'yi girin. Başlangıçtaki istemciler public client'tır;
+client secret boş bırakılır, PKCE zorunludur. Client secret kullanmak isterseniz
+`OAuth:Clients:0:ClientSecret` veya `OAuth:Clients:1:ClientSecret` değerini secret
+store/ortam değişkeninden verin; istemci confidential olur. Secret'ı bağlantı
+ayarlarına da girin. Genel `/oauth/register` endpoint'i açılmaz.
+
+Callback adresi istemcinin yönetim sayfasında farklı görünüyorsa, gösterilen
+**tam adresi** ilgili `RedirectUris` listesine ekleyin. Joker adres kullanmayın.
+Başka istemciler de aynı listeye ayrı client ID ve callback ile eklenebilir.
+
+ChatGPT ve Claude'un bulut bağlantısı `localhost` adresine erişemez. Bağlantı
+kurmadan önce sunucuyu erişilebilir HTTPS adresinde yayınlayın ve `OAuth:ServerUrl`
+değerini o adresle değiştirin. TLS reverse proxy'de sonlandırılıyorsa ASP.NET Core'un
+HTTPS bilgisini yalnızca güvenilen proxy'den alacak şekilde yapılandırılması gerekir.
+HTTPS denetimi geliştirmede de kapatılmaz.
+Yayında Release derlemesi ve Production ortamı kullanın; mevcut MVC controller'larındaki
+`RoleAuthorize` Debug istisnası devam eder. `/mcp` bu istisnayı kullanmaz.
+
+Access token ömrü `Jwt:AccessTokenLifetimeMinutes` ayarından gelir; varsayılan
+5 dakikadır. `mcp:tools offline_access` isteyen istemci refresh token da alır.
+Refresh token her kullanımda yenilenir; eski token'ın tekrar kullanılması ilgili
+yetkilendirmeyi iptal eder. Yenilemede kullanıcı, aktiflik ve roller veritabanından
+yeniden kontrol edilir. Kullanıcının `SecurityStamp` değeri değiştiğinde de yeni
+giriş gerekir; parola sıfırlama işlemleri bu alanı da güncellemelidir.
+Yenileme süresi ilk token'dan itibaren en fazla 7 gündür;
+sonra yeniden giriş gerekir. MCP token'ı REST API için kullanılamaz; REST giriş
+token'ı da MCP OAuth token'ı yerine kullanılamaz.
+
+OpenIddict kayıtları varsayılan `App_Data/mcp-oauth.db` SQLite dosyasındadır.
+Konum `OAuth:DatabasePath` ile değiştirilebilir. Bu dosya gizli yetkilendirme verisi
+içerir; HTTP üzerinden sunulmamalı, dosya erişimi uygulama hesabıyla sınırlandırılmalı
+ve yedeklenmelidir. SQLite yapılandırması tek sunucu içindir; çoklu instance için
+ortak bir OpenIddict veritabanı ve ortak anahtarlar gerekir.
+
+Development anahtarları geçicidir; API yeniden başlatılınca istemcide yeniden
+bağlantı kurulmalıdır. Production'da geçici anahtar kullanılmaz. Ayrı imzalama ve
+şifreleme PFX sertifikalarını, özel anahtarlarıyla birlikte sağlayın:
+`OAuth:SigningCertificatePath`, `OAuth:SigningCertificatePassword`,
+`OAuth:EncryptionCertificatePath`, `OAuth:EncryptionCertificatePassword`.
+Parolaları ve mevcut `Jwt:SigningKeyBase64` değerini secret store veya ortam
+değişkeni üzerinden verin. Sertifikalar, yerel HTTPS geliştirme sertifikasından
+ayrıdır ve kaynak koduna eklenmez.
+
+OAuth güvenlik testleri `dotnet test test/UluBilge.Test -c Release --filter FullyQualifiedName~McpOAuthTests` ile çalışır.
+Gerçek Northwind bağlantısı kullanılmadan PKCE, callback, CSRF, token bağlamları,
+refresh tekrar kullanımı ve rol denetimleri kontrol edilir.
+
+Auth ve Region controller testleri çalışan API'ye HTTP isteği gönderir.
+Başlatma ve çalıştırma adımları [test projesinin açıklamasındadır](test/UluBilge.Test/README.md).
 
 ## JWT ve kullanici girisi
 
@@ -192,8 +272,7 @@ IP basina dakikada bes giris denemesi kabul edilir.
 Basarili yanitin `data` nesnesi `accessToken`, `tokenType`, `expiresIn` ve
 `expiresAtUtc` alanlarini icerir. Tokeni `Authorization: Bearer <accessToken>`
 basligiyla gonderin. `GET /v1/Auth/me`, `data` icinde tokenin kullanici numarasi,
-adi ve rolunu dondurur. `MeAsync.Query`, `RequiresDatabase = false` ile
-veritabanina baglanmadan calisir; diger query'lerde varsayilan deger `true`'dur.
+adi ve rolunu dondurur; kullanicinin aktiflik bilgisi veritabanindan okunur.
 Parola tokena yazilmaz; token URL veya cookie uzerinden alinmaz.
 
 JWT'nin HS256 imzasi, issuer, audience ve gecerlilik suresi yerlesik JwtBearer
@@ -211,9 +290,9 @@ secret store uzerinden verin. Ornegin ortam degiskeni adi
 rastgele anahtar kullanilir; yeniden baslatmada onceki tokenlar gecersiz olur.
 HTTPS zorunlulugu Development disinda korunur.
 
-Refresh token, oturum ailesi, her istekte oturum sorgusu ve sunucu tarafli
-logout kaldirildi. Cikista istemci tokeni siler; suresi doldugunda yeniden giris
-yapilir. Kullanici kapatma, parola veya rol degisikligi mevcut tokeni aninda
+REST girisinde refresh token veya sunucu tarafli logout yoktur; bunlar MCP OAuth
+akisindan ayridir. Cikista REST istemcisi tokeni siler; suresi doldugunda yeniden
+giris yapilir. Kullanici kapatma, parola veya rol degisikligi mevcut REST tokenini aninda
 iptal etmez; en fazla token suresi ve saat toleransi sonunda etkili olur.
 Onceki tokenlarda farkli rol claim bicimi kullanildigi icin bu degisiklikten
 sonra yeniden giris yapilmalidir.

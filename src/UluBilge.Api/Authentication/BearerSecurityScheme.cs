@@ -1,12 +1,12 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.OpenApi;
 using UluBilge.Api.Localization;
 
-namespace UluBilge.Api.OpenApi
+namespace UluBilge.Api.Authentication
 {
-    internal sealed class BearerSecuritySchemeTransformer : IOpenApiDocumentTransformer, IOpenApiOperationTransformer
+    internal sealed class BearerSecurityScheme : IOpenApiDocumentTransformer, IOpenApiOperationTransformer
     {
         private const string SchemeName = "Bearer";
 
