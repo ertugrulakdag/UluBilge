@@ -67,8 +67,9 @@ uygulaması elle çalıştırılabilir:
 dotnet run --project src/UluBilge.Migration
 ```
 
-Migration yalnızca API projesindeki `appsettings.json` dosyasını kullanır ve
-`WriteConnection` ile bağlanır; ortam seçimi yapılmaz.
+Migration kendi projesindeki `src/UluBilge.Migration/appsettings.json` dosyasını
+kullanır ve `WriteConnection` ile bağlanır; ortam seçimi yapılmaz. Bu dosya derleme
+ve yayın çıktısına kopyalanır.
 Mevcut master script bazı Northwind nesnelerini silip yeniden oluşturur; yalnızca
 kurulumunu yapmak istediğiniz veritabanında çalıştırın. API başlatılırken migration
 otomatik çalıştırılmaz.

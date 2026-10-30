@@ -48,7 +48,7 @@ namespace UluBilge.Migration
                 .AddJsonFile("appsettings.json", optional: false)
                 .Build();
 
-            var projectName = configuration["ProjectName"] ?? "UluBilge";
+            var projectName = configuration["ProjectName"] ?? "Migration";
             var connectionString = configuration.GetConnectionString("WriteConnection");
             if (string.IsNullOrWhiteSpace(connectionString))
             {
