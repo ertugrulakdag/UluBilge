@@ -45,6 +45,24 @@ kısıtlaması yoktur. Yerel sertifika için `TrustServerCertificate=True` ayarl
 Ayarlar ortam dosyaları veya `ConnectionStrings__ReadConnection` ve
 `ConnectionStrings__WriteConnection` ortam değişkenleriyle değiştirilebilir.
 
+## Ortak hata yönetimi
+
+Handler'lar HTTP yanıtı oluşturmaz; hatalar mevcut `ApiExceptionHandler` tarafından
+Problem Details biçiminde döndürülür. `NotFoundException` HTTP 404'e,
+`ValidationException` HTTP 400'e çevrilir. `MeAsync`, kullanıcı veritabanında
+bulunamadığında `NotFoundException` fırlatır; açıklama yanıtın `detail` alanındadır.
+
+API model doğrulaması, alan ve sınıf kurallarındaki birden fazla hatayı `errors`
+içinde toplar. Alan hataları olsa da sınıf kuralları çalıştığından `Validate`
+metotları eksik veya null alanlara dayanıklı olmalıdır. Decorator'lar yerleşik
+`Validator.ValidateObject` kullanır; bu çağrı ilk doğrulama hatasında exception
+fırlatır. MCP rapor tool'u bu hatayı bir tool hatasına çevirir.
+
+Exception fırlatılması işlem akışını durdurur ve command transaction'ı geri alınır.
+Bağımsız iş kuralı hataları exception fırlatıldıktan sonra otomatik toplanmaz.
+Beklenmeyen hatalar merkezi handler'da güvenli bir 500 yanıtına çevrilir;
+ayrıntıları istemciye gönderilmez.
+
 ## Çalıştırma
 
 .NET 10 SDK ve erişilebilir, Northwind şeması kurulu bir SQL Server gerekir.

@@ -2,6 +2,7 @@ using System.Security.Claims;
 using UluBilge.App.Authentication;
 using UluBilge.Core.Entities;
 using UluBilge.Core.Enums;
+using UluBilge.Core.Exceptions;
 using UluBilge.Core.Queries;
 using UluBilge.Data.Abstract;
 
@@ -27,12 +28,16 @@ namespace UluBilge.App.Queries.AuthHandler
                     || !int.TryParse(principal.FindFirst("sub")?.Value, out var id)
                     || id <= 0 || string.IsNullOrWhiteSpace(principal.Identity.Name))
                 {
-                    return null;
+                    throw new CustomException();
                 }
-                User? user = await userRepository.GetByUserIdAsync(id, ct);
+                User? user = await userRepository.GetByUserIdAsync(12, ct);
+                if (user is null)
+                {
+                    throw new NotFoundException();
+                }
 
                 var roles = principal.FindAll(JwtOptions.RoleClaimType).Aggregate(RoleEnum.None, (mask, claim) => Enum.TryParse<RoleEnum>(claim.Value, out var role) ? mask | role : mask);
-                return new Result(id, principal.Identity.Name, roles, user?.IsActive ?? false);
+                return new Result(id, principal.Identity.Name, roles, user.IsActive);
             }
         }
     }

@@ -7,6 +7,7 @@ namespace UluBilge.Api.Localization
     {
         public static void ConfigureMvc(MvcOptions options)
         {
+            options.ValidateComplexTypesIfChildValidationFails = true;
             var messages = options.ModelBindingMessageProvider;
             messages.SetMissingBindRequiredValueAccessor(field => $"{field} alanı zorunludur.");
             messages.SetMissingKeyOrValueAccessor(() => "Bir değer girilmesi zorunludur.");

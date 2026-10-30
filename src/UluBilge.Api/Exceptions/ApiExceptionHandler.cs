@@ -14,6 +14,7 @@ namespace UluBilge.Api.Exceptions
             {
                 ValidationException validation => (StatusCodes.Status400BadRequest, "Geçersiz istek", validation.Message),
                 NotFoundException notFound => (StatusCodes.Status404NotFound, "Kayıt bulunamadı", notFound.Message),
+                CustomException customEx => (StatusCodes.Status422UnprocessableEntity, "İşlem gerçekleştirilemedi", customEx.Message),
                 SqlException { Number: 2601 or 2627 } => (StatusCodes.Status409Conflict, "Kayıt zaten var", "Bu bölge numarasıyla bir kayıt zaten bulunuyor."),
                 SqlException { Number: 547 } => (StatusCodes.Status409Conflict, "İlişkili kayıt var", "Bölge kaydı, ilişkili Territories kayıtları nedeniyle silinemiyor."),
                 _ => (StatusCodes.Status500InternalServerError, "İşlem tamamlanamadı", "Beklenmeyen bir hata oluştu.")
