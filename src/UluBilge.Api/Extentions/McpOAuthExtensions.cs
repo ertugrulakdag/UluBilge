@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using System.ComponentModel.DataAnnotations;
-using System.Globalization;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
@@ -33,14 +32,14 @@ namespace UluBilge.Api.Extentions
             var serverUrl = configuration["OAuth:ServerUrl"]?.TrimEnd('/') ?? "";
             if (!Uri.TryCreate(serverUrl, UriKind.Absolute, out var issuer) || issuer.Scheme != "https"
                 || issuer.AbsolutePath != "/" || issuer.Query != "" || issuer.Fragment != "" || issuer.UserInfo != ""
-                || (!environment.IsDevelopment() && issuer.IsLoopback))
+                || (!environment.IsDevelopment() && issuer.IsLoopback) || serverUrl.Length > 2044)
                 throw new InvalidOperationException("OAuth:ServerUrl, /mcp içermeyen bir HTTPS kök adresi olmalıdır. Production adresi localhost olamaz.");
 
             var resource = serverUrl + "/mcp";
             var clients = configuration.GetSection("OAuth:Clients").Get<OAuthClient[]>() ?? [];
             if (environment.IsDevelopment())
                 clients = [.. clients, .. configuration.GetSection("OAuth:DevelopmentClients").Get<OAuthClient[]>() ?? []];
-            if (clients.Any(client => string.IsNullOrWhiteSpace(client.ClientId) || client.RedirectUris.Length == 0
+            if (clients.Any(client => string.IsNullOrWhiteSpace(client.ClientId) || client.ClientId.Length > 128 || client.RedirectUris.Length == 0
                 || client.RedirectUris.Any(uri => !IsAllowedRedirectUri(uri, environment.IsDevelopment())))
                 || clients.Select(client => client.ClientId).Distinct(StringComparer.Ordinal).Count() != clients.Length)
                 throw new InvalidOperationException("OAuth istemcileri için benzersiz ClientId ve tam HTTPS RedirectUris adresleri gereklidir. Development ortamında HTTP loopback IP adresleri de kullanılabilir.");
@@ -94,9 +93,7 @@ namespace UluBilge.Api.Extentions
             var resource = serverUrl + "/mcp";
             var registeredClients = state.Clients;
             var authCodes = state.AuthCodes;
-            var refreshTokens = state.RefreshTokens;
             var clock = app.Services.GetRequiredService<TimeProvider>();
-            var signing = app.Services.GetRequiredService<SigningCredentials>();
             var jwtSettings = app.Services.GetRequiredService<JwtOptions>();
 
             app.MapGet("/.well-known/oauth-authorization-server", () => Results.Json(new
@@ -138,7 +135,8 @@ namespace UluBilge.Api.Extentions
             app.MapGet("/oauth/authorize", AuthorizeAsync).AllowAnonymous().ExcludeFromDescription();
             app.MapPost("/oauth/login", AuthorizeAsync).AllowAnonymous().RequireRateLimiting("auth-login").ExcludeFromDescription();
 
-            app.MapPost("/oauth/token", async (HttpContext context, IUserRepository users, IUnitOfWork work, CancellationToken ct) =>
+            app.MapPost("/oauth/token", async (HttpContext context, IUserRepository users, IUnitOfWork work,
+                AuthTokenService tokenService, IAsyncCommandHandler<RefreshTokenAsync.Command, LoginAsync.Result?> refreshHandler, CancellationToken ct) =>
             {
                 NoStore(context);
                 if (!context.Request.HasFormContentType) return OAuthError("invalid_request", "Form gövdesi gereklidir.");
@@ -147,7 +145,7 @@ namespace UluBilge.Api.Extentions
                 var clientId = form["client_id"].ToString();
                 if (!registeredClients.ContainsKey(clientId)) return OAuthError("invalid_client", "İstemci kayıtlı değil.");
                 if (form["resource"] != resource) return OAuthError("invalid_target", "İstenen kaynak bu MCP sunucusuna ait değil.");
-                RemoveExpiredTokens();
+                RemoveExpiredCodes();
 
                 if (form["grant_type"] == "authorization_code")
                 {
@@ -160,29 +158,37 @@ namespace UluBilge.Api.Extentions
                         || !authCodes.TryRemove(codeHash, out _))
                         return OAuthError("invalid_grant", "Kod, istemci, dönüş adresi veya PKCE doğrulaması geçersiz.");
 
-                    var user = await work.ExecuteQueryAsync(token => users.GetByUserIdAsync(code.UserId, token), ct);
-                    if (!CanUseMcp(user) || user!.SecurityStamp != code.SecurityStamp)
-                        return OAuthError("invalid_grant", "Kullanıcı erişimi artık geçerli değil.");
-                    return GenerateTokens(user, clientId, code.Scope);
+                    var result = await work.ExecuteCommandAsync(async token =>
+                    {
+                        var user = await users.GetByUserIdForUpdateAsync(code.UserId, token);
+                        if (!CanUseMcp(user) || user!.SecurityStamp != code.SecurityStamp)
+                            return null;
+
+                        var now = clock.GetUtcNow().UtcDateTime;
+                        var issued = await tokenService.IssueAsync(user, Guid.NewGuid(), now, now.AddDays(jwtSettings.RefreshTokenLifetimeDays), token,
+                            new OAuthTokenContext(issuer.AbsoluteUri, resource, clientId, code.Scope));
+                        return issued.Result;
+                    }, ct);
+                    return TokenResponse(result);
                 }
                 if (form["grant_type"] == "refresh_token")
                 {
-                    var hash = HashToken(form["refresh_token"].ToString());
-                    if (!refreshTokens.TryGetValue(hash, out var session) || session.ClientId != clientId || session.ExpiresAt <= clock.GetUtcNow())
-                        return OAuthError("invalid_grant", "Refresh token geçersiz veya süresi dolmuş.");
-                    if (form.TryGetValue("scope", out var scope) && scope.ToString().Split(' ', StringSplitOptions.RemoveEmptyEntries).Except(session.Scope.Split(' ')).Any())
-                        return OAuthError("invalid_scope", "İzin verilen kapsam genişletilemez.");
-                    var user = await work.ExecuteQueryAsync(token => users.GetByUserIdAsync(session.UserId, token), ct);
-                    lock (session)
+                    var command = new RefreshTokenAsync.Command
                     {
-                        // Eski tokenin tekrar kullanılması aynı oturumun bütün refresh tokenlarını iptal eder.
-                        if (session.Revoked || session.CurrentTokenHash != hash || session.ExpiresAt <= clock.GetUtcNow()
-                            || !CanUseMcp(user) || user!.SecurityStamp != session.SecurityStamp)
-                        {
-                            session.Revoked = true;
-                            return OAuthError("invalid_grant", "Oturum geçersiz. Yeniden giriş yapın.");
-                        }
-                        return GenerateTokens(user!, clientId, scope.Count == 1 ? scope.ToString() : session.Scope, session);
+                        RefreshToken = form["refresh_token"].ToString(),
+                        OAuth = new OAuthTokenContext(issuer.AbsoluteUri, resource, clientId,
+                            form.TryGetValue("scope", out var scope) ? scope.ToString() : null)
+                    };
+                    if (!Validator.TryValidateObject(command, new ValidationContext(command), [], true))
+                        return OAuthError("invalid_grant", "Refresh token geçersiz veya süresi dolmuş.");
+
+                    try
+                    {
+                        return TokenResponse(await refreshHandler.HandleAsync(command, ct));
+                    }
+                    catch (RefreshTokenAsync.InvalidScopeException)
+                    {
+                        return OAuthError("invalid_scope", "İzin verilen kapsam genişletilemez.");
                     }
                 }
                 return OAuthError("unsupported_grant_type", "Bu token akışı desteklenmiyor.");
@@ -234,7 +240,7 @@ namespace UluBilge.Api.Extentions
                 if (fields.GetValueOrDefault("decision") == "deny") return Redirect("error", "access_denied");
                 if (fields.GetValueOrDefault("decision") != "allow") return OAuthError("invalid_request", "Bağlantı onayı gereklidir.");
 
-                var command = new LoginAsync.Command { UserName = fields.GetValueOrDefault("userName", ""), Password = fields.GetValueOrDefault("password", "") };
+                var command = new LoginAsync.Command { UserName = fields.GetValueOrDefault("userName", ""), Password = fields.GetValueOrDefault("password", ""), AccessTokenOnly = true };
                 if (!Validator.TryValidateObject(command, new ValidationContext(command), [], true))
                     return LoginForm("Kullanıcı adı ve parola geçerli biçimde girilmelidir.", 400);
                 var login = await loginHandler.HandleAsync(command, ct);
@@ -244,7 +250,7 @@ namespace UluBilge.Api.Extentions
                     throw new InvalidOperationException("Giriş tokenı doğrulanamadı.");
                 var user = await work.ExecuteQueryAsync(token => users.GetByUserIdAsync(userId, token), ct);
                 if (!CanUseMcp(user)) return Redirect("error", "access_denied");
-                RemoveExpiredTokens();
+                RemoveExpiredCodes();
                 var code = NewToken();
                 authCodes[HashToken(code)] = new(userId, user!.SecurityStamp, clientId, redirectUri, challenge, string.Join(' ', scopes), clock.GetUtcNow().AddMinutes(2));
                 return Redirect("code", code);
@@ -265,7 +271,7 @@ namespace UluBilge.Api.Extentions
                         <!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>UluBilge bağlantısı</title>
                         <style>body{font:16px system-ui;max-width:430px;margin:10vh auto;padding:24px}input{display:block;width:95%;padding:10px;margin:6px 0 18px}button{padding:10px 16px;margin:8px}.error{color:#b42318}</style></head>
                         <body><h1>UluBilge'e bağlan</h1><p><strong>{{WebUtility.HtmlEncode(client.DisplayName)}}</strong>, ürün satış raporlarını okumak için izin istiyor.</p>
-                        <p>{{(scopes.Contains("offline_access") ? "Erişim en fazla 7 gün boyunca otomatik yenilenebilir." : "Erişim kısa süreliğine verilecektir.")}}</p>
+                        <p>{{(scopes.Contains("offline_access") ? $"Erişim en fazla {jwtSettings.RefreshTokenLifetimeDays} gün boyunca otomatik yenilenebilir." : "Erişim kısa süreliğine verilecektir.")}}</p>
                         <p class="error" role="alert">{{WebUtility.HtmlEncode(error)}}</p><form method="post" action="/oauth/login">{{hidden}}
                         <label>Kullanıcı adı<input name="userName" maxlength="64" autocomplete="username" required></label>
                         <label>Parola<input type="password" name="password" maxlength="128" autocomplete="current-password" required></label>
@@ -275,30 +281,18 @@ namespace UluBilge.Api.Extentions
                 }
             }
 
-            IResult GenerateTokens(User user, string clientId, string scope, RefreshTokenData? session = null)
+            static IResult TokenResponse(LoginAsync.Result? tokens)
             {
-                var now = clock.GetUtcNow();
-                var accessToken = new JsonWebTokenHandler().CreateToken(new SecurityTokenDescriptor
+                if (tokens is null)
+                    return OAuthError("invalid_grant", "Oturum geçersiz veya süresi dolmuş. Yeniden giriş yapın.");
+
+                var result = new Dictionary<string, object>
                 {
-                    Issuer = issuer.AbsoluteUri, Audience = resource, IssuedAt = now.UtcDateTime, NotBefore = now.UtcDateTime,
-                    Expires = now.AddMinutes(jwtSettings.AccessTokenLifetimeMinutes).UtcDateTime, SigningCredentials = signing,
-                    Claims = new Dictionary<string, object>
-                    {
-                        ["sub"] = user.Id.ToString(CultureInfo.InvariantCulture), ["name"] = user.UserName, ["scope"] = scope,
-                        [JwtOptions.RoleClaimType] = Enum.GetValues<RoleEnum>().Where(role => role != RoleEnum.None && user.RoleEnum.HasFlag(role)).Select(role => role.ToString()).ToArray()
-                    }
-                });
-                var result = new Dictionary<string, object> { ["access_token"] = accessToken, ["token_type"] = "Bearer", ["expires_in"] = jwtSettings.AccessTokenLifetimeMinutes * 60, ["scope"] = scope };
-                if (scope.Split(' ').Contains("offline_access"))
-                {
-                    session ??= new(user.Id, user.SecurityStamp, clientId, scope, now.AddDays(7));
-                    var refreshToken = NewToken();
-                    session.CurrentTokenHash = HashToken(refreshToken);
-                    session.Scope = scope;
-                    refreshTokens[session.CurrentTokenHash] = session;
-                    result["refresh_token"] = refreshToken;
-                }
-                else if (session is not null) session.Revoked = true;
+                    ["access_token"] = tokens.AccessToken, ["token_type"] = tokens.TokenType,
+                    ["expires_in"] = tokens.ExpiresIn, ["scope"] = tokens.Scope ?? string.Empty
+                };
+                if (!string.IsNullOrEmpty(tokens.RefreshToken))
+                    result["refresh_token"] = tokens.RefreshToken;
                 return Results.Json(result);
             }
 
@@ -306,11 +300,10 @@ namespace UluBilge.Api.Extentions
                 && (user.RoleEnum & ~Enum.GetValues<RoleEnum>().Aggregate(RoleEnum.None, (mask, role) => mask | role)) == 0
                 && (user.RoleEnum.HasFlag(RoleEnum.Report) || user.RoleEnum.HasFlag(RoleEnum.Admin));
 
-            void RemoveExpiredTokens()
+            void RemoveExpiredCodes()
             {
                 var now = clock.GetUtcNow();
                 foreach (var entry in authCodes.Where(entry => entry.Value.ExpiresAt <= now)) authCodes.TryRemove(entry.Key, out _);
-                foreach (var entry in refreshTokens.Where(entry => entry.Value.ExpiresAt <= now)) refreshTokens.TryRemove(entry.Key, out _);
             }
 
             static string Base64UrlEncode(byte[] bytes) => Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
@@ -327,21 +320,10 @@ namespace UluBilge.Api.Extentions
         private sealed record OAuthState(string ServerUrl, Uri Issuer, ConcurrentDictionary<string, OAuthClient> Clients)
         {
             public ConcurrentDictionary<string, AuthCodeData> AuthCodes { get; } = new();
-            public ConcurrentDictionary<string, RefreshTokenData> RefreshTokens { get; } = new();
         }
 
         private sealed record OAuthClient(string ClientId, string DisplayName, string[] RedirectUris);
         private sealed record AuthCodeData(int UserId, Guid SecurityStamp, string ClientId, string RedirectUri, string CodeChallenge, string Scope, DateTimeOffset ExpiresAt);
-        private sealed class RefreshTokenData(int userId, Guid securityStamp, string clientId, string scope, DateTimeOffset expiresAt)
-        {
-            public int UserId { get; } = userId;
-            public Guid SecurityStamp { get; } = securityStamp;
-            public string ClientId { get; } = clientId;
-            public string Scope { get; set; } = scope;
-            public DateTimeOffset ExpiresAt { get; } = expiresAt;
-            public string? CurrentTokenHash { get; set; }
-            public bool Revoked { get; set; }
-        }
         private sealed record ClientRegistration(
             [property: JsonPropertyName("redirect_uris")] string[]? RedirectUris,
             [property: JsonPropertyName("client_name")] string? ClientName,

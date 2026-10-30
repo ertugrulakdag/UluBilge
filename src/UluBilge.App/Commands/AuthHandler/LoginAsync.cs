@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Security.Cryptography;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 using UluBilge.App.Authentication;
@@ -19,6 +20,10 @@ namespace UluBilge.App.Commands.AuthHandler
 
             [Required, StringLength(128)]
             public string Password { get; init; } = string.Empty;
+
+            // OAuth giris formu kullaniciyi dogrular; refresh token kod degisiminde uretilir.
+            [JsonIgnore]
+            public bool AccessTokenOnly { get; init; }
         }
 
         public sealed class Result
@@ -29,9 +34,12 @@ namespace UluBilge.App.Commands.AuthHandler
             public DateTimeOffset ExpiresAtUtc { get; init; }
             public required string RefreshToken { get; init; }
             public DateTimeOffset RefreshTokenExpiresAtUtc { get; init; }
+
+            [JsonIgnore]
+            public string? Scope { get; init; }
         }
 
-        public sealed class Handler(IUserRepository userRepository, JwtOptions settings, AuthTokenService tokenService) : IAsyncCommandHandler<Command, Result?>
+        public sealed class Handler(IUserRepository userRepository, JwtOptions settings, AuthTokenService tokenService, TimeProvider clock) : IAsyncCommandHandler<Command, Result?>
         {
             private static readonly PasswordHasher<User> Passwords = new(Options.Create(new PasswordHasherOptions { IterationCount = 210_000 }));
             private static readonly User DummyUser = new();
@@ -43,7 +51,7 @@ namespace UluBilge.App.Commands.AuthHandler
                 // Transaction zaten CommandHandlerDecorator tarafindan acilir.
                 var user = await userRepository.GetByNormalizedUserNameForUpdateAsync(command.UserName.Trim().ToUpperInvariant(), ct);
                 var verification = VerifyPassword(user, command.Password);
-                var now = DateTime.UtcNow;
+                var now = clock.GetUtcNow().UtcDateTime;
                 if (user is null || !user.IsActive || user.LockoutEndUtc > now || (user.RoleEnum & ~KnownRoles) != 0)
                 {
                     return null;
@@ -62,6 +70,9 @@ namespace UluBilge.App.Commands.AuthHandler
                 }
 
                 await userRepository.RecordSuccessfulLoginAsync(user, now, ct);
+                if (command.AccessTokenOnly)
+                    return tokenService.CreateAccessToken(user, now);
+
                 var issued = await tokenService.IssueAsync(user, Guid.NewGuid(), now, now.AddDays(settings.RefreshTokenLifetimeDays), ct);
                 return issued.Result;
             }

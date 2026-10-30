@@ -180,9 +180,11 @@ yanlış bir 401 üreterek `mcp-remote` köprüsünü tekrar girişe yönlendirm
 OAuth servisleri, Minimal API endpoint'leri ve token yardımcıları API projesindeki
 `Extentions/McpOAuthExtensions.cs` dosyasındadır. `Program.cs` içinde `AddMcpOAuth`
 servisleri hazırlar, `MapMcpOAuth` OAuth ve korumalı MCP endpoint'lerini kaydeder.
-Kullanıcı adı/parola doğrulaması mevcut `LoginAsync` command'ını kullanır. MCP
-access token'ları mevcut JWT imzalama anahtarıyla üretilir; issuer ve audience
-değerleri MCP kaynağına özeldir.
+Kullanıcı adı/parola doğrulaması mevcut `LoginAsync` command'ını kullanır;
+bu adımda kullanılmayacak bir REST refresh token kaydı oluşturulmaz. Kod değişimi
+ve token üretimi `AuthTokenService`, yenileme ise REST ile ortak
+`RefreshTokenAsync` command'ı üzerinden çalışır. MCP access token'ları mevcut JWT
+imzalama anahtarıyla üretilir; issuer ve audience değerleri MCP kaynağına özeldir.
 
 | Adres | Görevi |
 | --- | --- |
@@ -234,22 +236,34 @@ Refresh token her kullanımda yenilenir; eski token'ın tekrar kullanılması il
 yetkilendirmeyi iptal eder. Yenilemede kullanıcı, aktiflik ve roller veritabanından
 yeniden kontrol edilir. Kullanıcının `SecurityStamp` değeri değiştiğinde de yeni
 giriş gerekir; parola sıfırlama işlemleri bu alanı da güncellemelidir.
-Yenileme süresi ilk token'dan itibaren en fazla 7 gündür;
-sonra yeniden giriş gerekir. MCP token'ı REST API için kullanılamaz; REST giriş
+Yenileme süresi `Jwt:RefreshTokenLifetimeDays` ayarından gelir; varsayılan olarak
+ilk token'dan itibaren en fazla 7 gündür ve rotasyonla uzamaz. Sonra yeniden
+giriş gerekir. MCP token'ı REST API için kullanılamaz; REST giriş
 token'ı da MCP OAuth token'ı yerine kullanılamaz.
 
-Authorization code ve refresh token'lar rastgele üretilir; bellekte yalnızca
-SHA-256 özetleri tutulur. Kodlar 2 dakika geçerlidir ve eş zamanlı isteklerde de
-yalnızca bir kez tüketilir. Süresi dolmuş kayıtlar OAuth isteklerinde temizlenir.
-Dinamik istemci kayıtları da bellektedir; en fazla 1000 toplam istemci kabul edilir.
-Bu yapı tek uygulama süreci içindir: yeniden başlatmada, Production dahil, yeniden
-giriş gerekir; dinamik istemciler tekrar kaydolur. Mevcut access token'lar, aynı
-imzalama anahtarı kullanılıyorsa süreleri bitene kadar geçerlidir. Çoklu instance
-ve yeniden başlatmalar arasında oturum devamlılığı için ortak kalıcı kayıt gerekir.
+Refresh token'ların SHA-256 özetleri `dbo.UserTokens` tablosunda tutulur. Aynı
+kayıtta OAuth istemcisi, MCP kaynak adresi, izin verilen scope ve kullanıcının
+`SecurityStamp` değeri saklanır. Bunun için
+`20261030T1200_UserTokensOAuth.sql` migration'ı dört nullable alan ekler;
+mevcut REST kayıtları korunur. MCP yenilemesi ve rotasyon/iptal işlemleri ortak
+command transaction'ında yapılır. Yanlış istemci veya REST/MCP endpoint'inde
+kullanım geçerli tokenı tüketmez. Scope genişletilemez; `offline_access`
+kaldırılırsa yalnızca access token döner ve refresh zinciri iptal edilir.
+
+Yapılandırmada tanımlı istemcilerin refresh token'ları uygulama yeniden
+başlatıldığında da kullanılabilir. Birden fazla instance aynı veritabanı,
+OAuth adresi, istemci yapılandırması ve imzalama anahtarını kullanmalıdır.
+Authorization code'ların yalnızca SHA-256 özetleri bellekte tutulmaya devam eder;
+kodlar 2 dakika geçerlidir ve yalnızca bir kez tüketilir. Süresi dolmuş kodlar
+OAuth isteklerinde temizlenir. Dinamik istemci kayıtları da bellektedir;
+en fazla 1000 toplam istemci kabul edilir. Yeniden başlatmada dinamik istemcilerin
+tekrar kaydolup izin alması gerekir; devam eden kod değişimi de kodu üreten
+instance'a ulaşmalıdır. Mevcut access token'lar, aynı imzalama anahtarı
+kullanılıyorsa süreleri bitene kadar geçerlidir.
 
 Production'da mevcut `Jwt:SigningKeyBase64` değerini secret store veya ortam
-değişkeni üzerinden verin. OAuth için ayrıca veritabanı veya imzalama/şifreleme
-sertifikası gerekmez; sunucu HTTPS üzerinden çalışır. Refresh token iptali mevcut
+değişkeni üzerinden verin. OAuth refresh token'ları mevcut SQL veritabanını kullanır;
+ayrıca imzalama/şifreleme sertifikası gerekmez. Sunucu HTTPS üzerinden çalışır. Refresh token iptali mevcut
 access token'ları anında iptal etmez; bu token'lar kısa geçerlilik süreleri boyunca
 kullanılabilir.
 
@@ -334,8 +348,9 @@ ilgili araçların belgelerinde açıklanır.
 Kaydettikten sonra Claude Desktop'ı tamamen kapatıp yeniden açın. İlk bağlantıda
 tarayıcıdaki UluBilge formunda giriş yapıp izin verin; kullanıcının `Report` veya
 `Admin` rolü olmalıdır. Ardından Claude'dan `get_product_sales` aracını kullanmasını
-isteyin. API yeniden başlatıldığında bellekteki istemci ve token kayıtları silinir;
-bağlantının yeniden yetkilendirilmesi gerekir. Eski istemci bilgisi önbellekte
+isteyin. Bu örnekteki dinamik istemci kaydı API yeniden başlatıldığında bellekten
+silinir; bağlantının yeniden kaydolup yetkilendirilmesi gerekir. Yapılandırmada
+tanımlı sabit istemcilerin refresh token'ları veritabanında korunur. Eski istemci bilgisi önbellekte
 kalırsa yalnızca bu sunucuya ait `mcp-remote` kaydını yenileyin. Köprünün varsayılan
 OAuth önbelleği kullanıcı dizinindeki `.mcp-auth` klasöründedir.
 
@@ -396,8 +411,10 @@ bu endpoint Bearer token gerektirmez:
 
 Yanit girisle ayni `data` alanlarini icerir. Her basarili yenilemeden sonra iki
 tokeni de yenileriyle degistirin. Refresh token 32 rastgele bayttan uretilir;
-`dbo.UserTokens` tablosunda yalnizca SHA-256 ozeti saklanir. Mevcut tablo semasi
-yeterlidir, yeni migration gerekmez. Varsayilan refresh token suresi ilk giristen
+`dbo.UserTokens` tablosunda yalnizca SHA-256 ozeti saklanir. REST ve MCP ortak
+token tablosunu ve yenileme handler'ini kullanir; OAuth baglam alanlari icin
+`20261030T1200_UserTokensOAuth.sql` migration'i uygulanmalidir.
+Varsayilan refresh token suresi ilk giristen
 itibaren 7 gundur; `Jwt:RefreshTokenLifetimeDays` ile 1-30 gun arasinda ayarlanir.
 Rotasyon bu son tarihi uzatmaz. API yeniden baslasa da refresh token kayitlari korunur.
 
@@ -411,11 +428,14 @@ kullanimi da tekrar kullanim sayilir ve yeniden giris gerektirir.
 Gecersiz, suresi dolmus veya iptal edilmis token `401`, eksik veya bozuk bicimli
 govde `400` doner. IP basina dakikada 30 yenileme istegi kabul edilir.
 Yenilemede kullanicinin aktifligi, kilit durumu ve guncel rolleri veritabanindan
-okunur. Sunucu tarafli REST logout endpoint'i yoktur. Parola/SecurityStamp
-degisikliginde token zincirlerini iptal etmek icin ilgili islemde `UserTokens`
-kayitlari da iptal edilmelidir. Zincir iptali mevcut access tokeni aninda iptal
+okunur. Yeni token kayitlari `SecurityStamp` anlik degerini de tutar;
+bu deger degistiginde sonraki yenileme zinciri iptal eder. Parola sifirlama
+islemleri `SecurityStamp` alanini da guncellemelidir. Migration oncesi REST
+kayitlari, ilk basarili rotasyonda bu kontrolu kazanir. Sunucu tarafli REST
+logout endpoint'i yoktur. Zincir iptali mevcut access tokeni aninda iptal
 etmez; access token kendi suresi ve saat toleransi boyunca kullanilabilir.
-REST refresh tokenlari ile MCP OAuth refresh tokenlari ayri akislardir.
+REST ve MCP refresh tokenlari istemci/kaynak baglamiyla ayrilir ve birbirinin
+endpoint'inde kullanilamaz.
 
 Bruno koleksiyonunda `AuthController` altinda **Login → RefreshToken → Me**
 sirasi kullanilabilir. Login ve RefreshToken, `accessToken` ve `refreshToken`

@@ -26,7 +26,24 @@ $env:ULUBILGE_TEST_PASSWORD = "admin"
 - `RegionControllerTests`: Tek test içinde **ekle → güncelle → listele → ID ile getir → sil** sırası izlenir. Sonrasında ID ile sorgulama `404` dönmelidir. Bir adım başarısız olursa testin oluşturduğu kayıt yine API üzerinden silinir.
 - `ApiTestClient`: API adresini, giriş işlemini ve HTTP istemcisini içerir.
 
-API'nin giriş sınırı dakikada 5 istektir. Bu testler toplam 5 giriş isteği gönderir; arka arkaya çalıştırırken bir dakika ara verin.
+API'nin giriş sınırı dakikada 10 istektir. Controller testleri toplam 5 giriş isteği gönderir.
+
+`McpOAuthRefreshTests`, gerçek SQL repository'leri ve ortak `RefreshTokenAsync`
+handler'ını TestServer üzerindeki OAuth endpoint'leriyle çalıştırır. Testin
+oluşturduğu `UluBilgeOAuthTests_<guid>` veritabanına yalnızca kullanıcı/token
+migration'ları uygulanır; test sonunda bu veritabanı silinir. Uygulamanın mevcut
+veritabanı değiştirilmez. SQL hesabının geçici veritabanı oluşturma/silme yetkisi
+olmalıdır. Bağlantı varsayılan olarak API `appsettings.json` dosyasından alınır;
+`ULUBILGE_TEST_CONNECTION` ile değiştirilebilir. Çalışan API gerekmez:
+
+```powershell
+dotnet test test/UluBilge.Test/UluBilge.Test.csproj -c Release --filter FullyQualifiedName~McpOAuthRefreshTests
+```
+
+Testler PKCE kod değişimini, hash ve OAuth bağlamının kalıcı kaydını, gerçek MCP
+erişimini, yeni host'ta yenilemeyi, rotasyon/replay ve eşzamanlı kullanımı,
+REST/MCP/istemci ayrımını, scope daraltmayı ve kullanıcı güvenlik değişikliklerini
+kontrol eder.
 
 `McpTransportAuthenticationTests`, API'nin gerçek OAuth ve MCP servis kayıtlarını
 `TestServer` üzerinde çalıştırır. SQL Server bağlantısı açmadan, geçerli MCP token'ıyla

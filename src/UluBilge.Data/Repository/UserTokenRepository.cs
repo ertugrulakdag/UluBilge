@@ -15,7 +15,8 @@ namespace UluBilge.Data.Repository
                 DECLARE @UserId int = (SELECT UserId FROM dbo.UserTokens WHERE TokenHash = @TokenHash);
                 SELECT @UserId = Id FROM dbo.Users WITH (UPDLOCK, ROWLOCK) WHERE Id = @UserId;
 
-                SELECT Id, UserId, TokenHash, FamilyId, CreatedAtUtc, ExpiresAtUtc,
+                SELECT Id, UserId, TokenHash, FamilyId, SecurityStamp, OAuthClientId, OAuthResource, OAuthScope,
+                       CreatedAtUtc, ExpiresAtUtc,
                        ConsumedAtUtc, RevokedAtUtc, ReplacedByTokenId
                 FROM dbo.UserTokens WITH (UPDLOCK, ROWLOCK)
                 WHERE TokenHash = @TokenHash;";
@@ -27,14 +28,16 @@ namespace UluBilge.Data.Repository
         public Task<long> InsertAsync(UserToken token, CancellationToken ct = default)
         {
             const string sql = @"
-                INSERT INTO dbo.UserTokens (UserId, TokenHash, FamilyId, CreatedAtUtc, ExpiresAtUtc)
+                INSERT INTO dbo.UserTokens
+                    (UserId, TokenHash, FamilyId, SecurityStamp, OAuthClientId, OAuthResource, OAuthScope, CreatedAtUtc, ExpiresAtUtc)
                 OUTPUT INSERTED.Id
-                VALUES (@UserId, @TokenHash, @FamilyId, @CreatedAtUtc, @ExpiresAtUtc);";
+                VALUES
+                    (@UserId, @TokenHash, @FamilyId, @SecurityStamp, @OAuthClientId, @OAuthResource, @OAuthScope, @CreatedAtUtc, @ExpiresAtUtc);";
 
             return unitOfWork.Connection.QuerySingleAsync<long>(new CommandDefinition(sql, token, unitOfWork.Transaction, cancellationToken: ct));
         }
 
-        public async Task ConsumeAsync(long tokenId, long replacedByTokenId, DateTime now, CancellationToken ct = default)
+        public async Task ConsumeAsync(long tokenId, long? replacedByTokenId, DateTime now, CancellationToken ct = default)
         {
             const string sql = @"
                 UPDATE dbo.UserTokens
