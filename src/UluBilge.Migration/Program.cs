@@ -35,7 +35,7 @@ namespace UluBilge.Migration
             }
             catch (InvalidOperationException ex)
             {
-                Console.WriteLine(ex.Message);
+                WriteLine($"Neden: {ex.Message}", ConsoleColor.Red);
             }
         }
 
