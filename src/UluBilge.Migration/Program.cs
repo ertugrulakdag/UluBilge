@@ -41,8 +41,6 @@ namespace UluBilge.Migration
 
         private static async Task<int> RunAsync()
         {
-            PrintHeader();
-
             var baseDir = AppContext.BaseDirectory;
 
             var configuration = new ConfigurationBuilder()
@@ -60,14 +58,13 @@ namespace UluBilge.Migration
 
             var connectionInfo = new SqlConnectionStringBuilder(connectionString);
 
-            Console.Title = $"Veritabanı Geçiş Aracı - {projectName}";
-
             Console.WriteLine();
             PrintBanner($"ÇALIŞILAN PROJE: {projectName}", ConsoleColor.Green);
             Console.WriteLine();
             WriteLine($"Proje       : {projectName}", ConsoleColor.Cyan);
             WriteLine($"Sunucu      : {connectionInfo.DataSource}", ConsoleColor.Cyan);
             WriteLine($"Veritabanı  : {connectionInfo.InitialCatalog}", ConsoleColor.Cyan);
+            WriteLine($"İşleme Başlanıyor...", ConsoleColor.Green);
             Console.WriteLine();
 
             var migrationsDir = Path.Combine(baseDir, "Migrations");
@@ -247,14 +244,7 @@ namespace UluBilge.Migration
                 .Select(b => b.Trim())
                 .Where(b => b.Length > 0)
                 .ToList();
-        }
-
-        private static void PrintHeader()
-        {
-            Console.WriteLine();
-            WriteLine("=== Veritabanı Geçiş Aracı ===", ConsoleColor.Magenta);
-            Console.WriteLine();
-        }
+        } 
 
         private static void PrintBanner(string text, ConsoleColor color)
         {
