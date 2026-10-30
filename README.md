@@ -115,9 +115,13 @@ net satış tutarına göre azalan sırada listeler. Bearer token ve `Report` ve
 `Admin` rollerinden biri gerekir. İstek, diğer sorgular gibi Query handler ve
 repository üzerinden `ReadConnection` bağlantısında çalışır.
 
+Debug derlemelerinde `RoleAuthorize` kullanılan controller ve metotlarda kimlik
+ve rol kontrolü atlanır. Release derlemelerinde token ve rol kontrolleri uygulanır.
+
 `year` isteğe bağlıdır; verilmezse tüm siparişler rapora katılır. Yıl aralığı
-1753–9999'dur ve filtre `Orders.OrderDate` alanına uygulanır. `topCount`
-varsayılan olarak 10'dur, 1–100 arasında olabilir. Hatalı parametreler 400 döndürür.
+1753–9999'dur ve filtre `Orders.OrderDate` alanına uygulanır. `topCount` isteğe
+bağlıdır; gönderilmezse veya null ise 10 kullanılır. Değer verildiğinde 1–100
+arasında olmalıdır. Hatalı parametreler 400 döndürür.
 
 Yanıttaki `data.data` listesinde `productId`, `productName`, `totalQuantity`,
 `orderCount` ve `netSales` bulunur. Net satış, sipariş satırındaki

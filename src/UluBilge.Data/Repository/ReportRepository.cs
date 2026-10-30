@@ -6,6 +6,15 @@ namespace UluBilge.Data.Repository
 {
     public sealed class ReportRepository(IUnitOfWork unitOfWork) : IReportRepository
     {
+        /// <summary>
+        /// Northwind siparişlerinden ürün bazında satış raporu oluşturur ve indirim sonrası net satış tutarı en yüksek ürünleri listeler. Her ürün için ürün numarası ve adı, toplam satılan adet, sipariş sayısı ve net satış tutarı döndürülür.
+        /// </summary>
+        /// <remarks>
+        /// Net satış, sipariş detaylarındaki UnitPrice × Quantity × (1 - Discount) tutarlarının toplamıdır ve iki ondalığa yuvarlanır; kargo bedeli dahil değildir. Sonuçlar net satış tutarına göre azalan, eşit tutarlarda ürün numarasına göre artan sırada döner. Satışı olmayan ürünler rapora dahil edilmez.
+        /// </remarks>
+        /// <param name="year">Sipariş tarihine (Orders.OrderDate) göre filtrelenecek yıl (1753–9999). Null ise tüm yıllar alınır.</param>
+        /// <param name="topCount">Döndürülecek en fazla ürün sayısı (1–100). Query handler, değer gönderilmezse veya null ise 10 iletir.</param>
+        /// <returns>Ürün satış özetleri; eşleşen satış yoksa boş liste.</returns>
         public async Task<IReadOnlyList<ProductSalesReportItem>> GetProductSalesAsync(int? year, int topCount, CancellationToken cancellationToken = default)
         {
             if (year.HasValue)

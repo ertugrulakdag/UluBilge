@@ -5,6 +5,9 @@ namespace UluBilge.Api.Authentication
 {
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = true)]
     public sealed class RoleAuthorizeAttribute(params RoleEnum[] roles) : AuthorizeAttribute, IAuthorizationRequirementData
+#if DEBUG
+        , IAllowAnonymous
+#endif
     {
         public IEnumerable<IAuthorizationRequirement> GetRequirements()
         {

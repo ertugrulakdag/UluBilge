@@ -13,7 +13,7 @@ namespace UluBilge.App.Queries.ReportHandler
             public int? Year { get; set; }
 
             [Range(1, 100, ErrorMessage = "Ürün sayısı 1 ile 100 arasında olmalıdır.")]
-            public int TopCount { get; set; } = 10;
+            public int? TopCount { get; set; }
         }
 
         public sealed class Result
@@ -25,7 +25,7 @@ namespace UluBilge.App.Queries.ReportHandler
         {
             public async Task<Result> HandleAsync(Query query, CancellationToken ct = default)
             {
-                var data = await reportRepository.GetProductSalesAsync(query.Year, query.TopCount, ct);
+                var data = await reportRepository.GetProductSalesAsync(query.Year, query.TopCount ?? 10, ct);
                 return new Result { Data = data };
             }
         }
