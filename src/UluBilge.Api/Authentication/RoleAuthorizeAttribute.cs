@@ -1,6 +1,12 @@
 using Microsoft.AspNetCore.Authorization;
 using UluBilge.Core.Enums;
-
+/*
+ * AuthorizeAttribute: ASP.NET Core’un yetkilendirme sistemine katılmasını sağlar.
+ * IAuthorizationRequirementData: Gerekli rol bilgisini GetRequirements() üzerinden yetkilendirme sistemine verir.
+ * roles.Aggregate(...): Verilen rolleri bit düzeyinde | işlemiyle birleştirir. Örneğin Admin = 1, Report = 2 ise sonuç 3 olur. Mevcut RoleAuthorizationHandler, kullanıcının bu rollerden en az birine sahip olup olmadığını kontrol eder.
+ * IAllowAnonymous, ASP.NET Core’a “bu uç noktaya giriş yapmadan erişilebilir” bilgisini verir.
+ * IAllowAnonymous, kimlik doğrulama middleware’ini kapatmaz. Gönderilen token işlenebilir; ancak kimlik veya rol sonucu bu uç noktaya erişimi engellemez.
+ */
 namespace UluBilge.Api.Authentication
 {
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = true)]
