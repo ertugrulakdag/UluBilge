@@ -251,43 +251,88 @@ kullanılabilir.
 ### Claude Desktop ile yerel debug
 
 Claude Desktop'ta **Settings → Developer → Edit config** ile açılan yerel MCP
-yapılandırması kullanılır. Bağlantı `Claude Desktop → mcp-remote →
-https://localhost:7187/mcp` şeklindedir. API Visual Studio'da **https** profiliyle
-F5 kullanılarak başlatılır; köprü ayrı bir API başlatmaz, çalışan debug sürecine
-bağlanır.
+yapılandırması kullanılır. Windows'ta dosya genellikle
+`%APPDATA%\Claude\claude_desktop_config.json` adresindedir; **Edit config** ile
+açılan dosyayı düzenleyin. `mcpServers`, dosyanın kökünde `preferences` ile aynı
+seviyede olmalıdır. Mevcut `preferences` değerlerini ve diğer MCP kayıtlarını
+koruyarak şu kaydı ekleyin; örnekteki boş `preferences` yalnızca yerleşimi gösterir:
 
-Node.js ve `mcp-remote` köprüsü her geliştirme bilgisayarında ayrıca kurulur.
-Yerel kurulum `mcp-remote` 0.15.2 kullanır. Claude yapılandırmasındaki
-`mcpServers.ulubilge-local` kaydı, Node.js ile köprünün `dist/proxy.js` dosyasını
-başlatır. Köprüye `--host 127.0.0.1`, `--transport http-only`,
-`--resource https://localhost:7187/mcp` ve sabit callback portu `3334` verilir.
-`--static-oauth-client-info` dosyası `ulubilge-claude-local` istemcisini,
-`--static-oauth-client-metadata` dosyası `mcp:tools offline_access` kapsamını ve
-`token_endpoint_auth_method: none` değerini belirtir.
+API’ye ulaşılıyor, ancak Node.js yerel HTTPS sertifikasına güvenmiyor.
+Önce terminalde geliştirme sertifikasını güvenilir yapın:
+```
+dotnet dev-certs https --trust
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.aspnet\https" | Out-Null
+dotnet dev-certs https --export-path "$env:USERPROFILE\.aspnet\https\localhost.pem" --format PEM
+```
+dotnet dev-certs https --trust, localhost.pem dosyasını oluşturmaz. Bu dosyayı ayrıca dışa aktarmış olmanız gerekiyor.
+Test-Path Sonuç True olmalı
+```json
+ preferences > altına
+ "mcpServers": {
+    "ulu-bilge-tool": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://localhost:7187/mcp",
+        "--host",
+        "127.0.0.1"
+      ],
+      "env": {
+        "NODE_EXTRA_CA_CERTS": "C:\\Users\\ertug\\.aspnet\\https\\localhost.pem"
+      }
+    }
+  }
+```
+Bu ayar Node’un Windows’taki güvenilen sertifikaları kullanmasını sağlar. Bilgisayarınızdaki Node.js v24.14.0 bunu destekliyor.
+API https profiliyle çalışırken Claude Desktop’ı tamamen kapatıp yeniden açın.
 
-HTTPS geliştirme sertifikasının yalnızca açık PEM kopyası `NODE_EXTRA_CA_CERTS`
-ile Node.js'e tanıtılır. Claude yapılandırmasını değiştirirken mevcut
-`preferences` ve diğer alanları koruyun. Microsoft Store kurulumunda bu dosya
-uygulamanın `LocalCache/Roaming/Claude` dizininde olabilir. Kurulum dosyaları
-ve Claude kaydındaki tam yollar makineye özeldir; kaynak koduna eklenmez.
+Node.js ve npm bilgisayarda kurulu, `npx` Claude'un erişebildiği `PATH` içinde
+olmalıdır. `-y`, paket ilk kez indirilirken etkileşimli onay beklenmesini önler.
+`ulu-bilge-tool`, Claude'da görünecek bağlantı adıdır.
+Yapılandırma biçimi [MCP'nin Claude Desktop rehberinde](https://modelcontextprotocol.io/docs/develop/connect-local-servers)
+ve [mcp-remote kullanım örneğinde](https://github.com/geelen/mcp-remote#usage) açıklanır.
 
-`OAuth:DevelopmentClients` yalnızca Development ortamında kaydedilir. Yerel
-istemci `ulubilge-claude-local`, tam dönüş adresi
-`http://127.0.0.1:3334/oauth/callback` kullanır; köprü bu portu dinler. HTTP dönüş
-adreslerine yalnızca Development ortamında ve loopback IP üzerinde izin verilir.
-API'nin `/mcp` adresi HTTPS ve OAuth, PKCE, scope ve rol denetimlerini kullanmaya
-devam eder.
+Bu projede `--host 127.0.0.1` gereklidir: `mcp-remote` varsayılan olarak
+`localhost` dönüş adresi üretir; uygulama Development ortamında HTTP dönüş
+adresleri için loopback IP ister. Köprü `/oauth/register` üzerinden dinamik
+istemci kaydı yapar. `resource` ve `mcp:tools offline_access` kapsamları sunucunun
+metadata belgelerinden bulunur. Bu örnekte sabit client ID veya callback portu
+tanımlamak gerekmez. [mcp-remote bayrakları](https://github.com/geelen/mcp-remote#flags)
 
-API'yi yeniden başlattıktan sonra Claude Desktop'ı tamamen kapatıp açın. İlk
-bağlantıda açılan tarayıcı formunda UluBilge kullanıcısıyla giriş yapıp izin verin;
-kullanıcının Report veya Admin rolü olmalıdır. Sonra Claude'dan `get_product_sales`
-aracını kullanmasını isteyin. API yeniden başlatıldığında geçici anahtarlar da
-değişir; bağlantıyı yeniden doğrulamak gerekebilir. Köprü dosyaları, sertifika
-kopyası ve OAuth oturumu `.local` altında tutulur ve Git'e eklenmez.
+API'yi Visual Studio'da **https** profiliyle F5 kullanarak veya şu komutla başlatın:
 
-OAuth güvenlik testleri `dotnet test test/UluBilge.Test -c Release --filter FullyQualifiedName~McpOAuthTests` ile çalışır.
-Gerçek Northwind bağlantısı kullanılmadan PKCE, callback, CSRF, token bağlamları,
-refresh tekrar kullanımı ve rol denetimleri kontrol edilir.
+```powershell
+dotnet run --project src/UluBilge.Api --launch-profile https
+```
+
+Bağlantı `Claude Desktop → mcp-remote → https://localhost:7187/mcp` şeklindedir;
+`mcp-remote`, çalışan API'ye bağlanır. API'nin Development ortamında çalışması
+yerel HTTP callback için gereklidir; `/mcp` HTTPS, OAuth, PKCE, scope ve rol
+denetimlerini kullanır.
+
+Node.js yerel HTTPS sertifikasına güvenmiyorsa, geliştirme sertifikasının açık
+PEM kopyasını oluşturun ve `ulu-bilge-tool` nesnesine, `command` ve `args` ile aynı
+seviyede `"env": { "NODE_EXTRA_CA_CERTS": "C:\\tam\\yol\\localhost.pem" }` ekleyin.
+Yolu kendi bilgisayarınızdaki gerçek, mutlak PEM yoluyla değiştirin.
+Açık sertifika dışa aktarma örneği:
+
+```powershell
+dotnet dev-certs https --export-path "C:\tam\yol\localhost.pem" --format PEM
+```
+
+Hedef klasör önceden mevcut olmalıdır.
+[Sertifika dışa aktarma](https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-dev-certs#options)
+ve [Node.js ek sertifika ayarı](https://nodejs.org/api/cli.html#node_extra_ca_certsfile)
+ilgili araçların belgelerinde açıklanır.
+
+Kaydettikten sonra Claude Desktop'ı tamamen kapatıp yeniden açın. İlk bağlantıda
+tarayıcıdaki UluBilge formunda giriş yapıp izin verin; kullanıcının `Report` veya
+`Admin` rolü olmalıdır. Ardından Claude'dan `get_product_sales` aracını kullanmasını
+isteyin. API yeniden başlatıldığında bellekteki istemci ve token kayıtları silinir;
+bağlantının yeniden yetkilendirilmesi gerekir. Eski istemci bilgisi önbellekte
+kalırsa yalnızca bu sunucuya ait `mcp-remote` kaydını yenileyin. Köprünün varsayılan
+OAuth önbelleği kullanıcı dizinindeki `.mcp-auth` klasöründedir.
 
 Auth ve Region controller testleri çalışan API'ye HTTP isteği gönderir.
 Başlatma ve çalıştırma adımları [test projesinin açıklamasındadır](test/UluBilge.Test/README.md).
