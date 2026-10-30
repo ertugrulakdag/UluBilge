@@ -53,7 +53,6 @@ if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi().AllowAnonymous();
     app.MapScalarApiReference("/docs", options => options.WithTitle("UluBilge API").AddPreferredSecuritySchemes("Bearer")).AllowAnonymous();
-    /*/mcp adresini açar ve bu adresten sunulan bütün tool’lara Report/Admin erişim şartını uygular.*/
 }
 
 app.UseHttpsRedirection();
@@ -63,8 +62,8 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
-app.MapMcp("/mcp")
-    .RequireAuthorization(new RoleAuthorizeAttribute(RoleEnum.Report, RoleEnum.Admin));
+app.MapMcp("/mcp").RequireAuthorization(new RoleAuthorizeAttribute(RoleEnum.Report, RoleEnum.Admin));
+/*/mcp adresini açar ve bu adresten sunulan bütün tool’lara Report/Admin erişim şartını uygular.*/
 
 app.Run();
 
