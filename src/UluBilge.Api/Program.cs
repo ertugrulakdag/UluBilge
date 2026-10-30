@@ -1,12 +1,9 @@
-using System.Text.Json.Nodes;
 using Scalar.AspNetCore;
-using UluBilge.Api.Authentication;
 using UluBilge.Api.Exceptions;
 using UluBilge.Api.Extentions;
 using UluBilge.Api.Localization;
 using UluBilge.Api.MCP.Tools;
 using UluBilge.App.Authentication;
-using UluBilge.App.Commands.AuthHandler;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,26 +11,7 @@ builder.Services.AddControllers(TurkishApiMessages.ConfigureMvc)
     .AddJsonOptions(options => options.AllowInputFormatterExceptionMessages = false)
     .ConfigureApiBehaviorOptions(TurkishApiMessages.ConfigureApiBehavior);
 
-builder.Services.AddOpenApi(options =>
-{
-    options.AddDocumentTransformer<BearerSecurityScheme>();
-    options.AddOperationTransformer<BearerSecurityScheme>();
-    if (builder.Environment.IsDevelopment())
-    {
-        options.AddOperationTransformer((operation, context, _) =>
-        {
-            if (context.Description.ParameterDescriptions.Any(parameter => parameter.Type == typeof(LoginAsync.Command)) && operation.RequestBody?.Content is { } content)
-            {
-                foreach (var mediaType in content.Values)
-                {
-                    mediaType.Example = new JsonObject { ["userName"] = "admin", ["password"] = "admin" };
-                }
-            }
-
-            return Task.CompletedTask;
-        });
-    }
-});
+builder.Services.AddApiOpenApi(builder.Environment);
 builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = TurkishApiMessages.CustomizeProblemDetails);
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddUluBilgeServices(builder.Configuration);
