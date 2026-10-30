@@ -33,9 +33,9 @@ namespace UluBilge.Migration
             {
                 Console.ReadKey(intercept: true);
             }
-            catch (InvalidOperationException)
+            catch (InvalidOperationException ex)
             {
-                //Console.ReadLine();
+                Console.WriteLine(ex.Message);
             }
         }
 
