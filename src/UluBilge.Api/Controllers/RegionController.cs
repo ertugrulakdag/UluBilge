@@ -26,18 +26,14 @@ namespace UluBilge.Api.Controllers
         }
 
         [HttpPost]
-        public async Task<ActionResult<BaseResponse<AddRegionAsync.Result>>> AddAsync(
-            [FromBody, Required(ErrorMessage = "İstek gövdesi zorunludur.")] AddRegionAsync.Command command,
-            CancellationToken ct)
+        public async Task<ActionResult<BaseResponse<AddRegionAsync.Result>>> AddAsync([FromBody, Required(ErrorMessage = "İstek gövdesi zorunludur.")] AddRegionAsync.Command command, CancellationToken ct)
         {
             var result = await AsyncCommandHandler<AddRegionAsync.Command, AddRegionAsync.Result>().HandleAsync(command, ct);
             return Ok(new BaseResponse<AddRegionAsync.Result>(result));
         }
 
         [HttpPut]
-        public async Task<ActionResult<BaseResponse<UpdateRegionAsync.Result>>> UpdateAsync(
-            [FromBody, Required(ErrorMessage = "İstek gövdesi zorunludur.")] UpdateRegionAsync.Command command,
-            CancellationToken ct)
+        public async Task<ActionResult<BaseResponse<UpdateRegionAsync.Result>>> UpdateAsync([FromBody, Required(ErrorMessage = "İstek gövdesi zorunludur.")] UpdateRegionAsync.Command command, CancellationToken ct)
         {
             var result = await AsyncCommandHandler<UpdateRegionAsync.Command, UpdateRegionAsync.Result>().HandleAsync(command, ct);
             return Ok(new BaseResponse<UpdateRegionAsync.Result>(result));

@@ -150,76 +150,51 @@ Release derlemelerinde MCP adresi de Bearer token ve `Report` veya `Admin`
 rollerinden birini gerektirir. Debug derlemelerinde mevcut `RoleAuthorize`
 davranışıyla anonim erişilebilir.
 
-## JWT ve mock giriş
+## JWT ve kullanici girisi
 
-Yerel geliştirmede `admin` kullanıcı adı ve `admin` parolasıyla giriş yapılabilir:
+Kimlik dogrulama yapisi `Authentication` klasorunde uc dosyadan olusur:
 
-```http
-POST https://localhost:7187/v1/Auth/login
-Content-Type: application/json
+| Dosya | Gorevi |
+| --- | --- |
+| `AuthService.cs` | Kullanici/parola kontrolu, JWT uretimi ve yanit modelleri |
+| `JwtOptions.cs` | Issuer, audience, imzalama anahtari ve token suresi |
+| `RoleAuthorizeAttribute.cs` | Standart rol claimleriyle coklu rol ve Debug davranisi |
 
-{"userName":"admin","password":"admin"}
-```
+`POST /v1/Auth/login`, JSON govdesindeki `userName` ve `password` ile
+`dbo.Users` tablosundaki kullaniciyi dogrular. Parolalar Identity PasswordHasher
+ile kontrol edilir. Bes hatali denemede hesap on bes dakika kilitlenir; ayrica
+IP basina dakikada bes giris denemesi kabul edilir.
 
-Yanıttaki `accessToken` değerini Scalar `/docs` ekranındaki **Bearer** alanına
-yapıştırın veya isteklerde `Authorization: Bearer <accessToken>` başlığı gönderin.
-`GET /v1/Auth/me` mevcut kullanıcıyı ve yetkilerini döndürür. Tokenlar URL veya
-cookie üzerinden kabul edilmez; parola token içine yazılmaz.
+Basarili yanit `accessToken`, `tokenType`, `expiresIn` ve `expiresAtUtc` alanlarini
+icerir. Tokeni `Authorization: Bearer <accessToken>` basligiyla gonderin.
+`GET /v1/Auth/me`, token icindeki kullanici numarasi, adi ve rolunu dondurur.
+Parola tokena yazilmaz; token URL veya cookie uzerinden alinmaz.
 
-Mock kullanıcı yalnızca **Development** ortamında çalışır; geliştirme sunucusunu
-localhost üzerinde kullanın. `DevelopmentUserAuthenticator`,
-`IUserAuthenticator` arayüzünü uygular. DB'ye geçerken gerçek doğrulamayı yapan
-uygulamayı `builder.Services.AddScoped<IUserAuthenticator, DatabaseUserAuthenticator>()`
-ile `AddApiAuthentication` çağrısından önce kaydedin. Kullanıcı kimliği, roller ve
-yetkiler sunucu tarafından belirlenmelidir. Parolaları DB'de güvenilir bir parola
-hashleme kütüphanesiyle saklayın; düz metin karşılaştırması yapmayın. Mevcut mock,
-IdentityV3 PBKDF2 HMAC-SHA512 ve 210.000 iterasyon kullanır. Production, Staging
-ve Test ortamları gerçek bir `IUserAuthenticator` kaydı olmadan başlatılmaz.
+JWT'nin HS256 imzasi, issuer, audience ve gecerlilik suresi yerlesik JwtBearer
+middleware'iyle dogrulanir. Token omru varsayilan bes dakika, izin verilen aralik
+1-15 dakikadir; saat farki toleransi on bes saniyedir. Token dogrulamasi her
+istekte veritabanina gitmez. Release derlemesinde gecersiz token 401, yetersiz rol
+403 sonucunu verir. Onceki istek uzerine Debug derlemesinde `RoleAuthorize`
+kullanilan yerlerde anonim erisim devam eder.
 
-JWT ayarları `Jwt:Issuer`, `Jwt:Audience` ve `Jwt:AccessTokenLifetimeMinutes`
-alanlarıdır. Varsayılan ömür 5 dakika, izin verilen aralık 1–15 dakikadır.
-HS256 imzası, issuer, audience, `at+jwt` türü, süre ve zorunlu kimlik claim'leri
-doğrulanır; saat sapması toleransı 15 saniyedir. Tüm yeni uç noktalar varsayılan
-olarak kimlik doğrulama gerektirir; anonim giriş ve Development dokümantasyonu
-açıkça istisnadır. Geçersiz token 401, yetersiz yetki 403 döndürür.
+Ayarlar `Jwt:Issuer`, `Jwt:Audience`, `Jwt:AccessTokenLifetimeMinutes` ve
+`Jwt:SigningKeyBase64` alanlaridir. Signing key, en az 32 rastgele baytin Base64
+karsiligi olmalidir. Development disinda anahtar zorunludur; ortam degiskeni veya
+secret store uzerinden verin. Ornegin ortam degiskeni adi
+`Jwt__SigningKeyBase64` olur. Development'ta anahtar verilmezse surece ozel
+rastgele anahtar kullanilir; yeniden baslatmada onceki tokenlar gecersiz olur.
+HTTPS zorunlulugu Development disinda korunur.
 
-İmzalama anahtarı repoda bulunmaz. Development'ta anahtar verilmezse süreç başına
-kriptografik olarak rastgele geçici bir anahtar üretilir; API yeniden başladığında
-eski tokenlar geçersiz olur. Geliştirme anahtarını kalıcı yapmak için PowerShell 7
-ile user-secrets içine yazabilirsiniz:
+Refresh token, oturum ailesi, her istekte oturum sorgusu ve sunucu tarafli
+logout kaldirildi. Cikista istemci tokeni siler; suresi doldugunda yeniden giris
+yapilir. Kullanici kapatma, parola veya rol degisikligi mevcut tokeni aninda
+iptal etmez; en fazla token suresi ve saat toleransi sonunda etkili olur.
+Onceki tokenlarda farkli rol claim bicimi kullanildigi icin bu degisiklikten
+sonra yeniden giris yapilmalidir.
 
-```powershell
-$jwtSigningKey = [Convert]::ToBase64String([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
-dotnet user-secrets set "Jwt:SigningKeyBase64" $jwtSigningKey --project src/UluBilge.Api
-Remove-Variable jwtSigningKey
-```
-
-Development dışında `Jwt__SigningKeyBase64` ortam değişkeni veya bir secret
-store üzerinden 32–128 rastgele byte'ın Base64 karşılığını sağlayın. Ortamlar
-arasında farklı anahtar, issuer ve audience kullanın. Boş, bozuk veya kısa anahtar
-uygulamanın açılmasını engeller; sessizce başka anahtara geçilmez. Anahtar
-değiştirildiğinde mevcut tokenlar geçersiz olur.
-
-Girişte IP başına dakikada 5, süreç genelinde dakikada 20 deneme sınırı vardır;
-aşımda `Retry-After` başlığıyla 429 döner. Giriş gövdesi 4 KB ile sınırlıdır.
-Token yanıtları önbelleklenmez, doğrulama hataları ayrıntı sızdırmaz. Development
-dışında HTTPS zorunludur. Reverse proxy kullanılırsa yalnızca bilinen proxy'lerden
-gelen forwarded header'lar yapılandırılmalıdır; uygulama bunlara kendiliğinden
-güvenmez. Birden çok API örneği için giriş sınırı ve hesap kilitleme DB/gateway
-katmanında ortak uygulanmalıdır.
-
-Bu aşamada refresh token ve logout/revocation uç noktası yoktur. Süresi dolan
-token için yeniden giriş yapılır; istemciden token silmek, mevcut tokenı sunucuda
-iptal etmez. Anlık oturum iptali ve refresh token eklenirken kalıcı oturum kaydı,
-rotation ve tekrar kullanım tespiti de eklenmelidir. Tarayıcı istemcisi tokenı
-kalıcı `localStorage` yerine bellekte tutmalıdır.
-
-Güvenlik testleri SQL bağlantısı kullanmadan gerçek JWT doğrulayıcısı üzerinden
-giriş, yetkilendirme, geçersiz tokenlar, yapılandırma ve ortam sınırlarını denetler:
-
-```powershell
-dotnet test UluBilge.slnx
-```
+Kullanilmayan `UserToken` entity/repository kodu kaldirildi. Gecmis migration
+ve mevcut `UserTokens` tablosu, var olan verileri etkilememek icin silinmedi;
+sade giris akisi bu tabloyu kullanmaz.
 
 ## Yeni özellik ekleme
 

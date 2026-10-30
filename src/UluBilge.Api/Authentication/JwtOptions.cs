@@ -8,6 +8,5 @@ namespace UluBilge.Api.Authentication
         public string Audience { get; set; } = string.Empty;
         public string? SigningKeyBase64 { get; set; }
         public int AccessTokenLifetimeMinutes { get; set; } = 5;
-        public int RefreshTokenLifetimeDays { get; set; } = 7;
     }
 }

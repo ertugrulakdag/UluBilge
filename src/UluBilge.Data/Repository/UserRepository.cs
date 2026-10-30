@@ -18,11 +18,6 @@ namespace UluBilge.Data.Repository
                 SelectUser + " WHERE NormalizedUserName = @NormalizedUserName;",
                 new { NormalizedUserName = normalizedUserName }, RequiredTransaction(), cancellationToken: cancellationToken));
 
-        public Task<User?> GetByIdForUpdateAsync(int userId, CancellationToken cancellationToken = default) =>
-            unitOfWork.Connection.QuerySingleOrDefaultAsync<User>(new CommandDefinition(
-                SelectUser + " WHERE Id = @UserId;",
-                new { UserId = userId }, RequiredTransaction(), cancellationToken: cancellationToken));
-
         public async Task RecordFailedLoginAsync(int userId, int accessFailedCount, DateTime? lockoutEndUtc, DateTime now, CancellationToken cancellationToken = default)
         {
             const string sql = """
