@@ -22,11 +22,9 @@ namespace UluBilge.App.Queries.AuthHandler
             public async Task<Result?> HandleAsync(Query query, CancellationToken ct = default)
             {
                 ct.ThrowIfCancellationRequested();
-                var principal = query.User;
+                var userPrincipal = query.User;
 
-                if (principal.Identity?.IsAuthenticated != true
-                    || !int.TryParse(principal.FindFirst("sub")?.Value, out var id)
-                    || id <= 0 || string.IsNullOrWhiteSpace(principal.Identity.Name))
+                if (userPrincipal.Identity?.IsAuthenticated != true || !int.TryParse(userPrincipal.FindFirst("sub")?.Value, out var id) || id <= 0 || string.IsNullOrWhiteSpace(userPrincipal.Identity.Name))
                 {
                     throw new CustomException();
                 }
@@ -36,8 +34,8 @@ namespace UluBilge.App.Queries.AuthHandler
                     throw new NotFoundException();
                 }
 
-                var roles = principal.FindAll(JwtOptions.RoleClaimType).Aggregate(RoleEnum.None, (mask, claim) => Enum.TryParse<RoleEnum>(claim.Value, out var role) ? mask | role : mask);
-                return new Result(id, principal.Identity.Name, roles, user.IsActive);
+                var roles = userPrincipal.FindAll(JwtOptions.RoleClaimType).Aggregate(RoleEnum.None, (mask, claim) => Enum.TryParse<RoleEnum>(claim.Value, out var role) ? mask | role : mask);
+                return new Result(id, userPrincipal.Identity.Name, roles, user.IsActive);
             }
         }
     }
