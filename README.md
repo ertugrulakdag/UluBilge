@@ -108,6 +108,23 @@ silme fiziksel olarak yapılır.
 `src/UluBilge.Api/UluBilge.Api.http` dosyasında giriş ve Bearer token ile
 çalıştırılabilecek CRUD istekleri bulunur.
 
+## Ürün satış raporu
+
+`GET /v1/Report/GetProductSales?year=1997&topCount=10` ürünleri indirim sonrası
+net satış tutarına göre azalan sırada listeler. Bearer token ve `Report` veya
+`Admin` rollerinden biri gerekir. İstek, diğer sorgular gibi Query handler ve
+repository üzerinden `ReadConnection` bağlantısında çalışır.
+
+`year` isteğe bağlıdır; verilmezse tüm siparişler rapora katılır. Yıl aralığı
+1753–9999'dur ve filtre `Orders.OrderDate` alanına uygulanır. `topCount`
+varsayılan olarak 10'dur, 1–100 arasında olabilir. Hatalı parametreler 400 döndürür.
+
+Yanıttaki `data.data` listesinde `productId`, `productName`, `totalQuantity`,
+`orderCount` ve `netSales` bulunur. Net satış, sipariş satırındaki
+`UnitPrice × Quantity × (1 − Discount)` tutarları toplanıp iki ondalığa yuvarlanarak
+hesaplanır; kargo bedeli dahil değildir. Eşit tutarlarda ürün numarasıyla sıralanır.
+Satışı olmayan ürünler listelenmez; eşleşen satış yoksa boş liste döner.
+
 ## JWT ve mock giriş
 
 Yerel geliştirmede `admin` kullanıcı adı ve `admin` parolasıyla giriş yapılabilir:
