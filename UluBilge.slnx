@@ -7,4 +7,8 @@
   <Project Path="src/UluBilge.Core/UluBilge.Core.csproj" />
   <Project Path="src/UluBilge.Data/UluBilge.Data.csproj" />
   <Project Path="src/UluBilge.Migration/UluBilge.Migration.csproj" />
+  <Project Path="src/UluBilge.McpServer/UluBilge.McpServer.csproj" />
+  <Folder Name="/tests/">
+    <Project Path="tests/UluBilge.McpServer.Tests/UluBilge.McpServer.Tests.csproj" />
+  </Folder>
 </Solution>
