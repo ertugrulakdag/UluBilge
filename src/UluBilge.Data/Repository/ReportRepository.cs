@@ -15,7 +15,7 @@ namespace UluBilge.Data.Repository
         /// <param name="year">Sipariş tarihine (Orders.OrderDate) göre filtrelenecek yıl (1753–9999). Null ise tüm yıllar alınır.</param>
         /// <param name="topCount">Döndürülecek en fazla ürün sayısı (1–100). Query handler, değer gönderilmezse veya null ise 10 iletir.</param>
         /// <returns>Ürün satış özetleri; eşleşen satış yoksa boş liste.</returns>
-        public async Task<IReadOnlyList<ProductSalesReportItem>> GetProductSalesAsync(int? year, int topCount, CancellationToken cancellationToken = default)
+        public async Task<IReadOnlyList<ProductSalesReportItem>> GetProductSalesAsync(int? year, int topCount, CancellationToken ct = default)
         {
             if (year.HasValue)
             {
@@ -49,7 +49,7 @@ namespace UluBilge.Data.Repository
             };
 
             var data = await unitOfWork.Connection.QueryAsync<ProductSalesReportItem>(
-                new CommandDefinition(sql, parameters, unitOfWork.Transaction, cancellationToken: cancellationToken));
+                new CommandDefinition(sql, parameters, unitOfWork.Transaction, cancellationToken: ct));
             return data.AsList();
         }
     }

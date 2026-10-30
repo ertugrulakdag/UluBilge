@@ -17,7 +17,7 @@ namespace UluBilge.Api.MCP.Tools
             IAsyncQueryHandler<GetProductSalesAsync.Query, GetProductSalesAsync.Result> queryHandler,
             [Description("Sipariş tarihine göre filtrelenecek yıl (1753–9999). Gönderilmezse veya null ise tüm yıllar alınır.")] int? year = null,
             [Description("Döndürülecek en fazla ürün sayısı (1–100). Gönderilmezse veya null ise 10 kullanılır.")] int? topCount = null,
-            CancellationToken cancellationToken = default)
+            CancellationToken ct = default)
         {
             try
             {
@@ -25,7 +25,7 @@ namespace UluBilge.Api.MCP.Tools
                 {
                     Year = year,
                     TopCount = topCount
-                }, cancellationToken);
+                }, ct);
 
                 return new BaseResponse<GetProductSalesAsync.Result>(result);
             }

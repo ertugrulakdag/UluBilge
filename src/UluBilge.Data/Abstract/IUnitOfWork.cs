@@ -7,8 +7,8 @@ namespace UluBilge.Data.Abstract
         DbConnection Connection { get; }
         DbTransaction? Transaction { get; }
 
-        Task<TResult> ExecuteQueryAsync<TResult>(Func<CancellationToken, Task<TResult>> action, CancellationToken cancellationToken = default);
+        Task<TResult> ExecuteQueryAsync<TResult>(Func<CancellationToken, Task<TResult>> action, CancellationToken ct = default);
 
-        Task<TResult> ExecuteCommandAsync<TResult>(Func<CancellationToken, Task<TResult>> action, CancellationToken cancellationToken = default);
+        Task<TResult> ExecuteCommandAsync<TResult>(Func<CancellationToken, Task<TResult>> action, CancellationToken ct = default);
     }
 }

@@ -4,6 +4,6 @@ namespace UluBilge.Data.Abstract
 {
     public interface IReportRepository
     {
-        Task<IReadOnlyList<ProductSalesReportItem>> GetProductSalesAsync(int? year, int topCount, CancellationToken cancellationToken = default);
+        Task<IReadOnlyList<ProductSalesReportItem>> GetProductSalesAsync(int? year, int topCount, CancellationToken ct = default);
     }
 }

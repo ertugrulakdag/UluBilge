@@ -12,12 +12,12 @@ namespace UluBilge.Data.Repository
                    CreatedAtUtc, UpdatedAtUtc, LastLoginAtUtc, IsActive
             FROM dbo.Users WITH (UPDLOCK, ROWLOCK)";
 
-        public Task<User?> GetByNormalizedUserNameForUpdateAsync(string normalizedUserName, CancellationToken cancellationToken = default) =>
+        public Task<User?> GetByNormalizedUserNameForUpdateAsync(string normalizedUserName, CancellationToken ct = default) =>
             unitOfWork.Connection.QuerySingleOrDefaultAsync<User>(new CommandDefinition(
                 SelectUser + " WHERE NormalizedUserName = @NormalizedUserName;",
-                new { NormalizedUserName = normalizedUserName }, unitOfWork.Transaction, cancellationToken: cancellationToken));
+                new { NormalizedUserName = normalizedUserName }, unitOfWork.Transaction, cancellationToken: ct));
 
-        public Task<User?> GetByUserIdAsync(int userId, CancellationToken cancellationToken = default)
+        public Task<User?> GetByUserIdAsync(int userId, CancellationToken ct = default)
         {
             const string sql = @"
                 SELECT Id, UserName, NormalizedUserName, PasswordHash, Email, EmailConfirmed,
@@ -25,10 +25,10 @@ namespace UluBilge.Data.Repository
                        CreatedAtUtc, UpdatedAtUtc, LastLoginAtUtc, IsActive
                 FROM dbo.Users
                 WHERE Id = @UserId;";
-            return unitOfWork.Connection.QuerySingleOrDefaultAsync<User>(new CommandDefinition(sql, new { UserId = userId }, unitOfWork.Transaction, cancellationToken: cancellationToken));
+            return unitOfWork.Connection.QuerySingleOrDefaultAsync<User>(new CommandDefinition(sql, new { UserId = userId }, unitOfWork.Transaction, cancellationToken: ct));
         }
 
-        public async Task RecordFailedLoginAsync(int userId, int accessFailedCount, DateTime? lockoutEndUtc, DateTime now, CancellationToken cancellationToken = default)
+        public async Task RecordFailedLoginAsync(int userId, int accessFailedCount, DateTime? lockoutEndUtc, DateTime now, CancellationToken ct = default)
         {
             const string sql = @"
                 UPDATE dbo.Users
@@ -36,10 +36,10 @@ namespace UluBilge.Data.Repository
                 WHERE Id = @UserId;";
             await unitOfWork.Connection.ExecuteAsync(new CommandDefinition(sql,
                 new { UserId = userId, AccessFailedCount = accessFailedCount, LockoutEndUtc = lockoutEndUtc, Now = now },
-                 unitOfWork.Transaction, cancellationToken: cancellationToken));
+                 unitOfWork.Transaction, cancellationToken: ct));
         }
 
-        public async Task RecordSuccessfulLoginAsync(User user, DateTime now, CancellationToken cancellationToken = default)
+        public async Task RecordSuccessfulLoginAsync(User user, DateTime now, CancellationToken ct = default)
         {
             const string sql = @"
                 UPDATE dbo.Users
@@ -47,7 +47,7 @@ namespace UluBilge.Data.Repository
                     LastLoginAtUtc = @Now, UpdatedAtUtc = @Now
                 WHERE Id = @Id;";
             await unitOfWork.Connection.ExecuteAsync(new CommandDefinition(sql,
-                new { user.Id, user.PasswordHash, Now = now }, unitOfWork.Transaction, cancellationToken: cancellationToken));
+                new { user.Id, user.PasswordHash, Now = now }, unitOfWork.Transaction, cancellationToken: ct));
         }
     }
 }

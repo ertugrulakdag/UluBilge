@@ -10,7 +10,7 @@ namespace UluBilge.Api.OpenApi
     {
         private const string SchemeName = "Bearer";
 
-        public Task TransformAsync(OpenApiDocument document, OpenApiDocumentTransformerContext context, CancellationToken cancellationToken)
+        public Task TransformAsync(OpenApiDocument document, OpenApiDocumentTransformerContext context, CancellationToken ct)
         {
             document.Components ??= new OpenApiComponents();
             document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
@@ -25,7 +25,7 @@ namespace UluBilge.Api.OpenApi
             return Task.CompletedTask;
         }
 
-        public Task TransformAsync(OpenApiOperation operation, OpenApiOperationTransformerContext context, CancellationToken cancellationToken)
+        public Task TransformAsync(OpenApiOperation operation, OpenApiOperationTransformerContext context, CancellationToken ct)
         {
             if (operation.Responses is not null)
             {
