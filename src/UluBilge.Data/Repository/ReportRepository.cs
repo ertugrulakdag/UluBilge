@@ -16,15 +16,7 @@ namespace UluBilge.Data.Repository
         /// <param name="topCount">Döndürülecek en fazla ürün sayısı (1–100). Query handler, değer gönderilmezse veya null ise 10 iletir.</param>
         /// <returns>Ürün satış özetleri; eşleşen satış yoksa boş liste.</returns>
         public async Task<IReadOnlyList<ProductSalesReportItem>> GetProductSalesAsync(int? year, int topCount, CancellationToken ct = default)
-        {
-            if (year.HasValue)
-            {
-                ArgumentOutOfRangeException.ThrowIfLessThan(year.Value, 1753);
-                ArgumentOutOfRangeException.ThrowIfGreaterThan(year.Value, 9999);
-            }
-            ArgumentOutOfRangeException.ThrowIfLessThan(topCount, 1);
-            ArgumentOutOfRangeException.ThrowIfGreaterThan(topCount, 100);
-
+        { 
             const string sql = @"
             SELECT TOP (@TopCount)
                 p.ProductID AS ProductId,
@@ -48,8 +40,7 @@ namespace UluBilge.Data.Repository
                 EndDate = year.HasValue && year.Value < 9999 ? new DateTime(year.Value + 1, 1, 1) : (DateTime?)null
             };
 
-            var data = await unitOfWork.Connection.QueryAsync<ProductSalesReportItem>(
-                new CommandDefinition(sql, parameters, unitOfWork.Transaction, cancellationToken: ct));
+            var data = await unitOfWork.Connection.QueryAsync<ProductSalesReportItem>(new CommandDefinition(sql, parameters, unitOfWork.Transaction, cancellationToken: ct));
             return data.AsList();
         }
     }

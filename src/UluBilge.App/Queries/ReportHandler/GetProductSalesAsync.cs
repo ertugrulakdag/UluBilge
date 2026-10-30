@@ -9,7 +9,7 @@ namespace UluBilge.App.Queries.ReportHandler
     {
         public sealed class Query : IQuery<Result>
         {
-            [Range(1753, 9999, ErrorMessage = "Yıl 1753 ile 9999 arasında olmalıdır.")]
+            [Range(1753, 9999, ErrorMessage = "Yıl 1753 ile 9999 arasında olmalıdır...")]
             public int? Year { get; set; }
 
             [Range(1, 100, ErrorMessage = "Ürün sayısı 1 ile 100 arasında olmalıdır.")]
