@@ -5,8 +5,8 @@ using UluBilge.Api.Exceptions;
 using UluBilge.Api.Extentions;
 using UluBilge.Api.Localization;
 using UluBilge.Api.MCP.Tools;
+using UluBilge.App.Authentication;
 using UluBilge.App.Commands.AuthHandler;
-using UluBilge.App.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
