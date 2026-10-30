@@ -150,7 +150,76 @@ Release derlemelerinde MCP adresi de Bearer token ve `Report` veya `Admin`
 rollerinden birini gerektirir. Debug derlemelerinde mevcut `RoleAuthorize`
 davranışıyla anonim erişilebilir.
 
-## JWT ve mock giriş
+## MCP OAuth girişi
+
+OpenIddict 7.7.2, authorization code + PKCE (`S256`) ve refresh token akışlarını
+yönetir. MCP istemcisi sunucuyu keşfeder, `/oauth/register` ile kendi callback
+adresini kaydeder ve kullanıcıyı giriş formuna yönlendirir. Form, istemcinin adını
+ve rapor erişimi isteğini gösterir; **Giriş yap ve izin ver** işlemi mevcut kullanıcı
+adı/parola, hesap kilitleme ve oturum kurallarıyla doğrulanır.
+
+| HTTP | Adres | İşlev |
+| --- | --- | --- |
+| GET | `/.well-known/oauth-protected-resource/mcp` | MCP kaynağını, `mcp:tools` iznini ve OAuth sunucusunu bildirir |
+| GET | `/.well-known/oauth-authorization-server` | Authorization, token, kayıt ve iptal adreslerini bildirir |
+| GET | `/.well-known/openid-configuration` | Aynı sunucunun alternatif keşif belgesini sunar |
+| POST | `/oauth/register` | İstemciyi ve callback adreslerini kalıcı kaydeder |
+| GET / POST | `/oauth/authorize` | Giriş formunu ve açık kullanıcı iznini işler |
+| POST | `/oauth/token` | Kodu veya refresh tokenı standart OAuth token yanıtına dönüştürür |
+| POST | `/oauth/revoke` | İstemcinin OAuth tokenını iptal eder |
+
+Kodlar kısa ömürlü ve tek kullanımlıktır. Kod değişiminde PKCE, `client_id` ve
+callback adresi OpenIddict tarafından doğrulanır. Callback için HTTPS veya yerel
+masaüstü istemcilerine ait loopback HTTP kabul edilir. Kayıtlı olmayan adreslere
+kod gönderilmez. `none`, `client_secret_post` ve `client_secret_basic` istemci
+yöntemleri desteklenir; secret gerektiğinde rastgele üretilir ve OpenIddict
+tarafından hash'lenerek saklanır. PKCE bütün istemciler için zorunludur.
+
+OAuth access tokenının audience değeri MCP adresidir ve `mcp:tools` izni aranır.
+Refresh tokenlar her kullanımda yenilenir; tekrar kullanımları reddedilir. Token
+kaydının geçerliliği ve mevcut veritabanı oturumu her OAuth erişiminde kontrol
+edilir. Kullanıcı pasifleştirilirse, rolü veya security stamp değeri değişirse ya da
+oturumu iptal edilirse OAuth erişimi de geçersiz olur. `offline_access` istenirse
+refresh token verilir. Eski `/v1/Auth/login` tokenları MCP'de desteklenmeye devam eder.
+
+OAuth istemci, authorization code ve token kayıtları varsayılan olarak
+`src/UluBilge.Api/App_Data/oauth.db` dosyasında tutulur. Bu, Northwind iş verilerinden
+ayrı kalıcı bir SQLite deposudur; uygulama ilk açılışta tablolarını oluşturur.
+`App_Data` Git'e dahil edilmez. Yeniden başlatmalarda istemci ve tokenların
+korunması için bu dosya ve kullanılan anahtarlar saklanmalıdır.
+
+| Ayar | Açıklama |
+| --- | --- |
+| `OAuth:Issuer` | Uygulamanın dışarıdan erişilen sabit HTTPS kök adresi; örneğin `https://mcp.example.com/` |
+| `OAuth:DatabasePath` | OAuth SQLite dosyasının yolu; varsayılan `App_Data/oauth.db` |
+| `OAuth:AllowDynamicClientRegistration` | Dinamik kayıt ve keşifte kayıt adresi; varsayılan `true` |
+| `OAuth:SigningCertificatePath` | Development dışındaki ortamlarda private key içeren imzalama PFX dosyasının tam yolu |
+| `OAuth:SigningCertificatePassword` | İmzalama PFX parolası; environment variable veya secret store ile verilir |
+| `OAuth:EncryptionCertificatePath` | Development dışındaki ortamlarda private key içeren ayrı şifreleme PFX dosyasının tam yolu |
+| `OAuth:EncryptionCertificatePassword` | Şifreleme PFX parolası; environment variable veya secret store ile verilir |
+
+Environment variable adlarında `:` yerine `__` kullanılır. Development ortamında
+issuer varsayılanı `https://localhost:7187/` olur; farklı adres kullanılıyorsa
+`OAuth__Issuer` açıkça ayarlanmalıdır. Yerel sertifikalar kullanıcı sertifika
+deposunda saklanır. Development dışında issuer ve iki PFX dosyası zorunludur;
+eksik ayarlarda uygulama başlangıçta hata verir.
+
+Gerçek OAuth girişini yerelde görmek için uygulamayı **Release** yapılandırması ve
+`https` launch profiliyle çalıştırın. Debug derlemesinde önceki `RoleAuthorize`
+tercihi gereği MCP anonim erişilebilir; istemci OAuth girişini başlatmayabilir.
+ChatGPT, Codex veya Claude gibi dış istemcilere bağlanırken MCP adresi dışarıdan
+erişilebilir HTTPS adresi olmalı ve `OAuth:Issuer` aynı kök adresi göstermelidir.
+Burada henüz OAuth Client ID Metadata Documents yayınlama/alma desteği yoktur;
+istemciler dinamik kaydı veya önceden verilmiş client ID bilgilerini kullanabilir.
+
+`OAuthFlowTests`, gerçek MCP SDK istemcisinin otomatik keşif, dinamik kayıt, giriş
+ve rapor çağrısını; ayrıca PKCE, callback, form koruması, rol, oturum iptali,
+refresh rotation ve yeniden başlatma sonrası kalıcılığı denetler. Testler Northwind
+verilerini değiştirmeden ayrı geçici SQLite dosyaları kullanır. OAuth zorunluluğunu
+da denetlemek için testleri `dotnet test UluBilge.slnx --configuration Release`
+komutuyla çalıştırın.
+
+## JWT ve kullanıcı girişi
 
 Yerel geliştirmede `admin` kullanıcı adı ve `admin` parolasıyla giriş yapılabilir:
 
@@ -166,15 +235,11 @@ yapıştırın veya isteklerde `Authorization: Bearer <accessToken>` başlığı
 `GET /v1/Auth/me` mevcut kullanıcıyı ve yetkilerini döndürür. Tokenlar URL veya
 cookie üzerinden kabul edilmez; parola token içine yazılmaz.
 
-Mock kullanıcı yalnızca **Development** ortamında çalışır; geliştirme sunucusunu
-localhost üzerinde kullanın. `DevelopmentUserAuthenticator`,
-`IUserAuthenticator` arayüzünü uygular. DB'ye geçerken gerçek doğrulamayı yapan
-uygulamayı `builder.Services.AddScoped<IUserAuthenticator, DatabaseUserAuthenticator>()`
-ile `AddApiAuthentication` çağrısından önce kaydedin. Kullanıcı kimliği, roller ve
-yetkiler sunucu tarafından belirlenmelidir. Parolaları DB'de güvenilir bir parola
-hashleme kütüphanesiyle saklayın; düz metin karşılaştırması yapmayın. Mevcut mock,
-IdentityV3 PBKDF2 HMAC-SHA512 ve 210.000 iterasyon kullanır. Production, Staging
-ve Test ortamları gerçek bir `IUserAuthenticator` kaydı olmadan başlatılmaz.
+`DatabaseUserAuthenticationService`, kullanıcıyı `dbo.Users` tablosunda doğrular.
+Parolalar IdentityV3 PBKDF2 HMAC-SHA512 ve 210.000 iterasyonla hash'lenir.
+Beş hatalı denemede hesap 15 dakika kilitlenir. Kullanıcı aktifliği, rolü,
+security stamp ve kalıcı oturum kaydı token kullanılırken de denetlenir.
+OAuth giriş formu aynı servisi kullandığı için bu kurallar iki giriş türünde ortaktır.
 
 JWT ayarları `Jwt:Issuer`, `Jwt:Audience` ve `Jwt:AccessTokenLifetimeMinutes`
 alanlarıdır. Varsayılan ömür 5 dakika, izin verilen aralık 1–15 dakikadır.
@@ -208,14 +273,15 @@ gelen forwarded header'lar yapılandırılmalıdır; uygulama bunlara kendiliği
 güvenmez. Birden çok API örneği için giriş sınırı ve hesap kilitleme DB/gateway
 katmanında ortak uygulanmalıdır.
 
-Bu aşamada refresh token ve logout/revocation uç noktası yoktur. Süresi dolan
-token için yeniden giriş yapılır; istemciden token silmek, mevcut tokenı sunucuda
-iptal etmez. Anlık oturum iptali ve refresh token eklenirken kalıcı oturum kaydı,
-rotation ve tekrar kullanım tespiti de eklenmelidir. Tarayıcı istemcisi tokenı
-kalıcı `localStorage` yerine bellekte tutmalıdır.
+`POST /v1/Auth/refresh`, JSON gövdesindeki `refreshToken` ile API tokenlarını
+yeniler; refresh tokenları döndürülerek değiştirilir ve tekrar kullanımları
+tespit edilir. `POST /v1/Auth/logout`, Bearer tokenın oturum ailesini iptal eder.
+Bu API adresleri mevcut camelCase JSON sözleşmesini korur; OAuth istemcileri
+form gövdeli `/oauth/token` ve standart snake_case OAuth yanıtlarını kullanır.
+Tarayıcı istemcisi tokenı kalıcı `localStorage` yerine bellekte tutmalıdır.
 
-Güvenlik testleri SQL bağlantısı kullanmadan gerçek JWT doğrulayıcısı üzerinden
-giriş, yetkilendirme, geçersiz tokenlar, yapılandırma ve ortam sınırlarını denetler:
+Güvenlik testleri Northwind bağlantısı kullanmadan gerçek JWT/OAuth doğrulayıcıları
+ve geçici OAuth deposuyla giriş ve yetkilendirme akışlarını denetler:
 
 ```powershell
 dotnet test UluBilge.slnx

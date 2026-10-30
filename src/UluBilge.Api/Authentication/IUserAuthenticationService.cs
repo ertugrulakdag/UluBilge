@@ -3,6 +3,7 @@ namespace UluBilge.Api.Authentication
     public interface IUserAuthenticationService
     {
         Task<TokenResponse?> LoginAsync(string userName, string password, CancellationToken cancellationToken = default);
+        Task<UserSession?> LoginForOAuthAsync(string userName, string password, CancellationToken cancellationToken = default); // OAuth girisinde ayni parola ve kilitleme kurallarini kullanarak oturum acar.
         Task<TokenResponse?> RefreshAsync(string refreshToken, CancellationToken cancellationToken = default);
         Task LogoutAsync(UserSession session, CancellationToken cancellationToken = default);
         Task<bool> IsSessionValidAsync(UserSession session, CancellationToken cancellationToken = default);

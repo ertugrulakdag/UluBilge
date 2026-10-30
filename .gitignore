@@ -361,3 +361,6 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# // Yerel OAuth veritabanini kaynak kodundan ayirir.
+src/UluBilge.Api/App_Data/

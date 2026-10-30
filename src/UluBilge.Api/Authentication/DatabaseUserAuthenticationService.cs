@@ -20,8 +20,14 @@ namespace UluBilge.Api.Authentication
         private const int MaximumFailedAttempts = 5;
         private static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(15);
 
-        public Task<TokenResponse?> LoginAsync(string userName, string password, CancellationToken cancellationToken = default) =>
-            unitOfWork.ExecuteCommandAsync<TokenResponse?>(async ct =>
+        public async Task<TokenResponse?> LoginAsync(string userName, string password, CancellationToken cancellationToken = default) => // Mevcut JSON giris uc noktasini korur.
+            (await LoginCoreAsync(userName, password, cancellationToken))?.Tokens; // Ortak giris sonucundan API tokenlarini dondurur.
+
+        public async Task<UserSession?> LoginForOAuthAsync(string userName, string password, CancellationToken cancellationToken = default) => // OAuth icin ayni kullanici dogrulama akisini kullanir.
+            (await LoginCoreAsync(userName, password, cancellationToken))?.Session; // Parola dogrulandiginda kalici oturum kimligini dondurur.
+
+        private Task<AuthenticatedLogin?> LoginCoreAsync(string userName, string password, CancellationToken cancellationToken) => // Iki giris turunun parola, kilitleme ve oturum mantigini ortak tutar.
+            unitOfWork.ExecuteCommandAsync<AuthenticatedLogin?>(async ct => // Kullanici kilidini ve oturum kaydini ayni islemde yonetir.
             {
                 var user = await users.GetByNormalizedUserNameForUpdateAsync(userName.Trim().ToUpperInvariant(), ct);
                 var passwordResult = passwords.Verify(user, password);
@@ -46,7 +52,10 @@ namespace UluBilge.Api.Authentication
                 }
 
                 await users.RecordSuccessfulLoginAsync(user, now, ct);
-                return await IssueTokensAsync(user, Guid.NewGuid(), now, now.AddDays(options.Value.RefreshTokenLifetimeDays), ct);
+                var familyId = Guid.NewGuid(); // Yeni girise ait ortak oturum ailesini olusturur.
+                var issuedTokens = await IssueTokensAsync(user, familyId, now, now.AddDays(options.Value.RefreshTokenLifetimeDays), ct); // Mevcut kalici oturum ve yenileme kaydini acar.
+                var session = new UserSession(new AuthenticatedUser(user.Id, user.UserName, user.RoleEnum), user.SecurityStamp, familyId); // OAuth claimleri icin dogrulanmis kullanici ve oturum bilgisini hazirlar.
+                return issuedTokens is null ? null : new AuthenticatedLogin(session, issuedTokens); // Yalnizca basarili giriste oturum ve tokenlari dondurur.
             }, cancellationToken);
 
         public Task<TokenResponse?> RefreshAsync(string refreshToken, CancellationToken cancellationToken = default)
@@ -128,6 +137,8 @@ namespace UluBilge.Api.Authentication
             return new TokenResponse(accessToken.AccessToken, accessToken.TokenType, accessToken.ExpiresIn, accessToken.ExpiresAtUtc,
                 refreshToken, new DateTimeOffset(DateTime.SpecifyKind(expiresAt, DateTimeKind.Utc)));
         }
+
+        private sealed record AuthenticatedLogin(UserSession Session, TokenResponse Tokens); // Ortak giris sonucunu servis icinde tasir.
 
         private static bool TryHashRefreshToken(string refreshToken, out byte[] hash)
         {

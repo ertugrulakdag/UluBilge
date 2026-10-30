@@ -11,6 +11,9 @@
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.12" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
     <PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.3.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.12" /> <!-- // OAuth kayitlarini kalici SQLite deposunda tutar. -->
+    <PackageReference Include="OpenIddict.AspNetCore" Version="7.7.2" /> <!-- // OAuth sunucusunu ve ASP.NET Core token dogrulamasini saglar. -->
+    <PackageReference Include="OpenIddict.EntityFrameworkCore" Version="7.7.2" /> <!-- // OpenIddict istemci ve token kayitlarini veritabanina baglar. -->
     <PackageReference Include="Scalar.AspNetCore" Version="2.18.5" />
     <PackageReference Include="Scrutor" Version="7.0.0" />
   </ItemGroup>

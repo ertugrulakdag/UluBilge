@@ -6,6 +6,7 @@ using UluBilge.Api.Localization;
 using UluBilge.Api.MCP.Tools;
 using UluBilge.Api.OpenApi;
 using UluBilge.Core.Enums;
+using ModelContextProtocol.AspNetCore.Authentication; // MCP'ye ozel OAuth kesif ve token dogrulama semasini kullanir.
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -22,6 +23,7 @@ builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = 
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddUluBilgeServices(builder.Configuration);
 builder.Services.AddApiAuthentication(builder.Configuration, builder.Environment);
+builder.Services.AddUluBilgeOAuth(builder.Configuration, builder.Environment); // Mevcut kullanici sistemine kalici OAuth ve PKCE destegi ekler.
 builder.Services.AddMcpServer()
     .WithHttpTransport()
     .WithToolsFromAssembly(typeof(ProductSalesReportTool).Assembly);
@@ -62,7 +64,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
-app.MapMcp("/mcp").RequireAuthorization(new RoleAuthorizeAttribute(RoleEnum.Report, RoleEnum.Admin));
+app.MapMcp("/mcp").RequireAuthorization(new RoleAuthorizeAttribute(RoleEnum.Report, RoleEnum.Admin) { AuthenticationSchemes = McpAuthenticationDefaults.AuthenticationScheme }); // MCP'de OAuth veya mevcut JWT ile ayni rol ve Debug kurallarini uygular.
 /*/mcp adresini açar ve bu adresten sunulan bütün tool’lara Report/Admin erişim şartını uygular.*/
 
 app.Run();
