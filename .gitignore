@@ -362,7 +362,7 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 
-# OAuth token veritabani ve ozel sertifikalar
+# Yerel uygulama verileri ve ozel sertifikalar
 /src/UluBilge.Api/App_Data/
 /src/UluBilge.Api/certificates/
 

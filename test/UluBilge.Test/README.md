@@ -28,4 +28,11 @@ $env:ULUBILGE_TEST_PASSWORD = "admin"
 
 API'nin giriş sınırı dakikada 5 istektir. Bu testler toplam 5 giriş isteği gönderir; arka arkaya çalıştırırken bir dakika ara verin.
 
-Mevcut OAuth testleri ayrı olarak `--filter FullyQualifiedName~McpOAuthTests` ile çalıştırılabilir.
+OAuth testleri doğrudan `Program.cs` başlangıcını `WebApplicationFactory` ile
+çalıştırır; gerçek SQL Server yerine sahte kullanıcı repository'si ve Unit of Work
+kullanır. PKCE, istemci/dönüş adresi, CSRF, token yenileme, süre sonu ve yeniden
+başlatmada tekrar giriş davranışı kontrol edilir:
+
+```powershell
+dotnet test test/UluBilge.Test/UluBilge.Test.csproj -c Release --filter FullyQualifiedName~McpOAuthTests
+```

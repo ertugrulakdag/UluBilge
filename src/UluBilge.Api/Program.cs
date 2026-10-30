@@ -1,13 +1,12 @@
 using System.Text.Json.Nodes;
 using Scalar.AspNetCore;
+using UluBilge.Api.Authentication;
 using UluBilge.Api.Exceptions;
 using UluBilge.Api.Extentions;
 using UluBilge.Api.Localization;
 using UluBilge.Api.MCP.Tools;
-using UluBilge.Api.MCP.OAuth;
 using UluBilge.App.Commands.AuthHandler;
 using UluBilge.App.Extensions;
-using UluBilge.Api.Authentication;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -76,10 +75,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
-await app.MapMcpOAuthAsync();
-app.MapMcp("/mcp").RequireAuthorization(McpOAuthOptions.Policy);
-// MCP icin token, kapsam ve Report/Admin rolu her derlemede zorunludur.
+app.MapMcpOAuth();
 
-app.Run();
-
-public partial class Program;
+app.Run(); 

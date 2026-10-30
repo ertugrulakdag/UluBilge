@@ -172,18 +172,20 @@ veya `Admin` rollerinden birini gerektirir.
 
 ## MCP OAuth: ChatGPT ve Claude
 
-`Program.cs` içinde iki kayıt vardır: `AddMcpOAuth` servisleri hazırlar,
-`MapMcpOAuthAsync` endpoint'leri ve onaylı istemcileri kaydeder. Yapı
-`MCP/OAuth` klasöründedir. OAuth protokol kontrollerini OpenIddict uygular;
-kullanıcı adı/parola doğrulaması mevcut `LoginAsync` command'ını kullanır.
+OAuth servisleri, Minimal API endpoint'leri ve token yardımcıları API projesindeki
+`Extentions/McpOAuthExtensions.cs` dosyasındadır. `Program.cs` içinde `AddMcpOAuth`
+servisleri hazırlar, `MapMcpOAuth` OAuth ve korumalı MCP endpoint'lerini kaydeder.
+Kullanıcı adı/parola doğrulaması mevcut `LoginAsync` command'ını kullanır. MCP
+access token'ları mevcut JWT imzalama anahtarıyla üretilir; issuer ve audience
+değerleri MCP kaynağına özeldir.
 
 | Adres | Görevi |
 | --- | --- |
 | `/.well-known/oauth-protected-resource/mcp` | MCP kaynağını ve yetkilendirme sunucusunu bildirir |
 | `/.well-known/oauth-authorization-server` | OAuth endpoint'lerini, scope ve PKCE desteğini bildirir |
-| `/.well-known/openid-configuration` | Aynı keşif belgesinin OIDC adresi |
+| `POST /oauth/register` | Public istemciyi tam dönüş adresleriyle kaydeder |
 | `GET /oauth/authorize` | İstemciyi doğrular; giriş ve izin formunu gösterir |
-| `POST /oauth/authorize` | Form güvenliğini ve kullanıcıyı doğrular; tek kullanımlık kod üretir |
+| `POST /oauth/login` | Form güvenliğini ve kullanıcıyı doğrular; tek kullanımlık kod üretir |
 | `POST /oauth/token` | Kodu token ile değiştirir veya refresh token ile erişimi yeniler |
 | `/mcp` | OAuth token ile araçlara erişim sağlar |
 
@@ -202,10 +204,12 @@ Kaynak adresi bunun sonuna `/mcp` eklenerek oluşur. İstemcileri eklerken:
 
 ChatGPT veya Claude'un bağlantı ayarlarında **kendi OAuth istemcini kullan**
 seçeneğini ve ilgili client ID'yi girin. Başlangıçtaki istemciler public client'tır;
-client secret boş bırakılır, PKCE zorunludur. Client secret kullanmak isterseniz
-`OAuth:Clients:0:ClientSecret` veya `OAuth:Clients:1:ClientSecret` değerini secret
-store/ortam değişkeninden verin; istemci confidential olur. Secret'ı bağlantı
-ayarlarına da girin. Genel `/oauth/register` endpoint'i açılmaz.
+client secret boş bırakılır, PKCE `S256` zorunludur. Bu sade akış yalnızca public
+istemcileri destekler. Dinamik kayıt destekleyen istemciler `/oauth/register`
+üzerinden `redirect_uris` ve isteğe bağlı `client_name` göndererek client ID alır.
+Kayıt dönüş adresleri HTTPS olmalıdır; yalnızca Development ortamında HTTP
+loopback IP adresleri de kabul edilir. Yetkilendirme sırasında dönüş adresi,
+kaydedilmiş tam adreslerden biriyle birebir eşleşmelidir.
 
 Callback adresi istemcinin yönetim sayfasında farklı görünüyorsa, gösterilen
 **tam adresi** ilgili `RedirectUris` listesine ekleyin. Joker adres kullanmayın.
@@ -229,20 +233,20 @@ Yenileme süresi ilk token'dan itibaren en fazla 7 gündür;
 sonra yeniden giriş gerekir. MCP token'ı REST API için kullanılamaz; REST giriş
 token'ı da MCP OAuth token'ı yerine kullanılamaz.
 
-OpenIddict kayıtları varsayılan `App_Data/mcp-oauth.db` SQLite dosyasındadır.
-Konum `OAuth:DatabasePath` ile değiştirilebilir. Bu dosya gizli yetkilendirme verisi
-içerir; HTTP üzerinden sunulmamalı, dosya erişimi uygulama hesabıyla sınırlandırılmalı
-ve yedeklenmelidir. SQLite yapılandırması tek sunucu içindir; çoklu instance için
-ortak bir OpenIddict veritabanı ve ortak anahtarlar gerekir.
+Authorization code ve refresh token'lar rastgele üretilir; bellekte yalnızca
+SHA-256 özetleri tutulur. Kodlar 2 dakika geçerlidir ve eş zamanlı isteklerde de
+yalnızca bir kez tüketilir. Süresi dolmuş kayıtlar OAuth isteklerinde temizlenir.
+Dinamik istemci kayıtları da bellektedir; en fazla 1000 toplam istemci kabul edilir.
+Bu yapı tek uygulama süreci içindir: yeniden başlatmada, Production dahil, yeniden
+giriş gerekir; dinamik istemciler tekrar kaydolur. Mevcut access token'lar, aynı
+imzalama anahtarı kullanılıyorsa süreleri bitene kadar geçerlidir. Çoklu instance
+ve yeniden başlatmalar arasında oturum devamlılığı için ortak kalıcı kayıt gerekir.
 
-Development anahtarları geçicidir; API yeniden başlatılınca istemcide yeniden
-bağlantı kurulmalıdır. Production'da geçici anahtar kullanılmaz. Ayrı imzalama ve
-şifreleme PFX sertifikalarını, özel anahtarlarıyla birlikte sağlayın:
-`OAuth:SigningCertificatePath`, `OAuth:SigningCertificatePassword`,
-`OAuth:EncryptionCertificatePath`, `OAuth:EncryptionCertificatePassword`.
-Parolaları ve mevcut `Jwt:SigningKeyBase64` değerini secret store veya ortam
-değişkeni üzerinden verin. Sertifikalar, yerel HTTPS geliştirme sertifikasından
-ayrıdır ve kaynak koduna eklenmez.
+Production'da mevcut `Jwt:SigningKeyBase64` değerini secret store veya ortam
+değişkeni üzerinden verin. OAuth için ayrıca veritabanı veya imzalama/şifreleme
+sertifikası gerekmez; sunucu HTTPS üzerinden çalışır. Refresh token iptali mevcut
+access token'ları anında iptal etmez; bu token'lar kısa geçerlilik süreleri boyunca
+kullanılabilir.
 
 ### Claude Desktop ile yerel debug
 
