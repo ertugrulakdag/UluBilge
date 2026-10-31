@@ -403,14 +403,18 @@ namespace UluBilge.Api.Extentions
 
         private static bool MatchesRedirectUri(string registered, string requested)
         {
-            if (string.Equals(registered, requested, StringComparison.Ordinal)) return true;
-            if (!Uri.TryCreate(registered, UriKind.Absolute, out var registeredUri) || !IsHttpLoopbackUri(registeredUri)
-                || !Uri.TryCreate(requested, UriKind.Absolute, out var requestedUri) || !IsHttpLoopbackUri(requestedUri)) return false;
+            if (string.Equals(registered, requested, StringComparison.Ordinal))
+            {
+                return true;
+            }
+            if (!Uri.TryCreate(registered, UriKind.Absolute, out var registeredUri) || !IsHttpLoopbackUri(registeredUri) || !Uri.TryCreate(requested, UriKind.Absolute, out var requestedUri) || !IsHttpLoopbackUri(requestedUri))
+            {
+                return false;
+            }
 
             // RFC 8252: HTTP loopback dönüş adreslerinde yalnızca port farklı olabilir; kalan metin birebir eşleşir.
             const string authorityPattern = @"\A(http://(?:\[[^\]]+\]|[^:/?#]+))(?::[0-9]+)?";
-            return string.Equals(Regex.Replace(registered, authorityPattern, "$1", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant),
-                Regex.Replace(requested, authorityPattern, "$1", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant), StringComparison.Ordinal);
+            return string.Equals(Regex.Replace(registered, authorityPattern, "$1", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant), Regex.Replace(requested, authorityPattern, "$1", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant), StringComparison.Ordinal);
         }
 
         private sealed record OAuthState(string ServerUrl, Uri Issuer)

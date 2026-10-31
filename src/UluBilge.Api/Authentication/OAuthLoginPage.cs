@@ -246,15 +246,15 @@ namespace UluBilge.Api.Authentication
                             .page { padding: 0 24px; }
                             .masthead { padding: 24px 0 20px; }
                             .wordmark { font-size: 21px; }
-                            main { margin: 36px auto 32px; }
-                            h1 { letter-spacing: -1px; }
-                            .page-description { max-width: 320px; }
+                            main { margin: 28px auto 32px; }
+                            .page-label { margin-bottom: 14px; }
+                            h1 { font-size: 32px; letter-spacing: -1px; }
+                            .page-description, .request-note { display: none; }
                             .authorization { grid-template-columns: minmax(0, 1fr); margin-top: 28px; }
-                            .request { padding: 24px 0; border-right: 0; border-bottom: 1px solid var(--rule); }
+                            .request { padding: 20px 0; border-right: 0; border-bottom: 1px solid var(--rule); }
                             .client-name { font-size: 23px; }
-                            .permissions { margin-top: 20px; }
+                            .permissions { margin-top: 16px; }
                             .permission { grid-template-columns: 96px minmax(0, 1fr); padding: 12px 0; }
-                            .request-note { margin-top: 16px; }
                             .sign-in { padding: 28px 0; }
                             .actions { gap: 12px; }
                         }
