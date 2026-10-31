@@ -36,17 +36,6 @@ namespace UluBilge.Api.Extentions
                 throw new InvalidOperationException("OAuth:ServerUrl, /mcp içermeyen bir HTTPS kök adresi olmalıdır. Production adresi localhost olamaz.");
 
             var resource = serverUrl + "/mcp";
-            var clients = configuration.GetSection("OAuth:Clients").Get<OAuthClient[]>() ?? [];
-            if (environment.IsDevelopment())
-                clients = [.. clients, .. configuration.GetSection("OAuth:DevelopmentClients").Get<OAuthClient[]>() ?? []];
-            if (clients.Any(client => string.IsNullOrWhiteSpace(client.ClientId) || client.ClientId.Length > 128 || client.RedirectUris.Length == 0
-                || client.RedirectUris.Any(uri => !IsAllowedRedirectUri(uri, environment.IsDevelopment())))
-                || clients.Select(client => client.ClientId).Distinct(StringComparer.Ordinal).Count() != clients.Length)
-            {
-                throw new InvalidOperationException("OAuth istemcileri için benzersiz ClientId ve tam HTTPS RedirectUris adresleri gereklidir. Development ortamında HTTP loopback IP adresleri de kullanılabilir.");
-            }
-
-            var registeredClients = new ConcurrentDictionary<string, OAuthClient>(clients.ToDictionary(client => client.ClientId, StringComparer.Ordinal));
             services.TryAddSingleton(TimeProvider.System);
             services.AddAuthentication().AddJwtBearer("McpBearer", _ => { }).AddMcp(options =>
             {
@@ -73,9 +62,7 @@ namespace UluBilge.Api.Extentions
                     NameClaimType = "name",
                     RoleClaimType = JwtOptions.RoleClaimType,
                     ClockSkew = TimeSpan.FromSeconds(15),
-                    LifetimeValidator = (start, end, _, parameters) => end.HasValue && (!start.HasValue || start <= end)
-                        && (!start.HasValue || start <= clock.GetUtcNow().UtcDateTime + parameters.ClockSkew)
-                        && end > clock.GetUtcNow().UtcDateTime - parameters.ClockSkew
+                    LifetimeValidator = (start, end, _, parameters) => end.HasValue && (!start.HasValue || start <= end) && (!start.HasValue || start <= clock.GetUtcNow().UtcDateTime + parameters.ClockSkew) && end > clock.GetUtcNow().UtcDateTime - parameters.ClockSkew
                 };
             });
             services.AddAuthorization(options => options.AddPolicy("McpOAuth", policy => policy
@@ -92,7 +79,7 @@ namespace UluBilge.Api.Extentions
             services.AddRateLimiter(options => options.AddPolicy("oauth-token", context => RateLimitPartition.GetFixedWindowLimiter(
                 context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                 _ => new FixedWindowRateLimiterOptions { PermitLimit = 30, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 })));
-            services.AddSingleton(new OAuthState(serverUrl, issuer, registeredClients));
+            services.AddSingleton(new OAuthState(serverUrl, issuer));
             return services;
         }
 
@@ -102,7 +89,6 @@ namespace UluBilge.Api.Extentions
             var serverUrl = state.ServerUrl;
             var issuer = state.Issuer;
             var resource = serverUrl + "/mcp";
-            var registeredClients = state.Clients;
             var authCodes = state.AuthCodes;
             var clock = app.Services.GetRequiredService<TimeProvider>();
             var jwtSettings = app.Services.GetRequiredService<JwtOptions>();
@@ -122,20 +108,31 @@ namespace UluBilge.Api.Extentions
                 authorization_response_iss_parameter_supported = true
             })).AllowAnonymous().ExcludeFromDescription();
 
-            app.MapPost("/oauth/register", (ClientRegistration request) =>
+            app.MapPost("/oauth/register", async (ClientRegistration request, HttpContext context, IOAuthClientRepository clients, IUnitOfWork work, CancellationToken ct) =>
             {
-                if (request.RedirectUris is not { Length: > 0 and <= 10 } || request.RedirectUris.Any(uri => !IsAllowedRedirectUri(uri, app.Environment.IsDevelopment())))
-                    return OAuthError("invalid_redirect_uri", "Tam HTTPS dönüş adresleri gereklidir.");
+                NoStore(context);
+                if (request.RedirectUris is not { Length: > 0 and <= 10 } || request.RedirectUris.Any(uri => !IsAllowedRedirectUri(uri)))
+                {
+                    return OAuthError("invalid_redirect_uri", "Tam HTTPS veya HTTP loopback IP dönüş adresleri gereklidir.");
+                }
                 if (request.ClientName?.Length > 128 || request.TokenEndpointAuthMethod is not (null or "none")
                     || request.ResponseTypes is not null && !request.ResponseTypes.SequenceEqual(["code"])
                     || request.GrantTypes is not null && (request.GrantTypes.Any(grant => grant is not ("authorization_code" or "refresh_token"))
-                        || !request.GrantTypes.Contains("authorization_code")))
+                    || !request.GrantTypes.Contains("authorization_code")))
+                {
                     return OAuthError("invalid_client_metadata", "Yalnızca public client, authorization_code ve refresh_token desteklenir.");
-                if (registeredClients.Count >= 1000)
+                }
+                var client = new OAuthClient
+                {
+                    ClientId = NewToken(),
+                    DisplayName = request.ClientName ?? "MCP istemcisi",
+                    CreatedAtUtc = clock.GetUtcNow().UtcDateTime,
+                    RedirectUris = request.RedirectUris.Distinct(StringComparer.Ordinal).ToArray()
+                };
+                if (!await work.ExecuteCommandAsync(token => clients.TryInsertAsync(client, token), ct))
+                {
                     return OAuthError("temporarily_unavailable", "İstemci kayıt sınırına ulaşıldı.", 503);
-
-                var client = new OAuthClient(NewToken(), request.ClientName ?? "MCP istemcisi", request.RedirectUris);
-                registeredClients[client.ClientId] = client;
+                }
                 return Results.Json(new
                 {
                     client_id = client.ClientId,
@@ -150,38 +147,59 @@ namespace UluBilge.Api.Extentions
             app.MapGet("/oauth/authorize", AuthorizeAsync).AllowAnonymous().ExcludeFromDescription();
             app.MapPost("/oauth/login", AuthorizeAsync).AllowAnonymous().RequireRateLimiting("auth-login").ExcludeFromDescription();
 
-            app.MapPost("/oauth/token", async (HttpContext context, IUserRepository users, IUnitOfWork work,
-                AuthTokenService tokenService, IAsyncCommandHandler<RefreshTokenAsync.Command, LoginAsync.Result?> refreshHandler, CancellationToken ct) =>
+            app.MapPost("/oauth/token", async (HttpContext context, IUserRepository users, IOAuthClientRepository clients, IUnitOfWork work, AuthTokenService tokenService, IAsyncCommandHandler<RefreshTokenAsync.Command, LoginAsync.Result?> refreshHandler, CancellationToken ct) =>
             {
                 NoStore(context);
-                if (!context.Request.HasFormContentType) return OAuthError("invalid_request", "Form gövdesi gereklidir.");
+
+                if (!context.Request.HasFormContentType)
+                {
+                    return OAuthError("invalid_request", "Form gövdesi gereklidir.");
+                }
                 var form = await context.Request.ReadFormAsync(ct);
-                if (form.Any(field => field.Value.Count != 1)) return OAuthError("invalid_request", "Tekrarlanan parametreler desteklenmiyor.");
+
+                if (form.Any(field => field.Value.Count != 1))
+                {
+                    return OAuthError("invalid_request", "Tekrarlanan parametreler desteklenmiyor.");
+                }
+
                 var clientId = form["client_id"].ToString();
-                if (!registeredClients.ContainsKey(clientId)) return OAuthError("invalid_client", "İstemci kayıtlı değil.");
-                if (form["resource"] != resource) return OAuthError("invalid_target", "İstenen kaynak bu MCP sunucusuna ait değil.");
+
+                if (clientId.Length is 0 or > 128 || await FindActiveClientAsync(clients, work, clientId, ct) is null)
+                {
+                    return OAuthError("invalid_client", "İstemci kayıtlı değil veya devre dışı.");
+                }
+
+                if (form["resource"] != resource)
+                {
+                    return OAuthError("invalid_target", "İstenen kaynak bu MCP sunucusuna ait değil.");
+                }
+
                 RemoveExpiredCodes();
 
                 if (form["grant_type"] == "authorization_code")
                 {
                     var codeHash = HashToken(form["code"].ToString());
                     var verifier = form["code_verifier"].ToString();
+
                     if (!authCodes.TryGetValue(codeHash, out var code) || code.ExpiresAt <= clock.GetUtcNow()
                         || code.ClientId != clientId || code.RedirectUri != form["redirect_uri"]
                         || !Regex.IsMatch(verifier, "\\A[A-Za-z0-9._~-]{43,128}\\z")
                         || !CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(code.CodeChallenge), Encoding.ASCII.GetBytes(HashToken(verifier)))
                         || !authCodes.TryRemove(codeHash, out _))
+                    {
                         return OAuthError("invalid_grant", "Kod, istemci, dönüş adresi veya PKCE doğrulaması geçersiz.");
+                    }
 
                     var result = await work.ExecuteCommandAsync(async token =>
                     {
                         var user = await users.GetByUserIdForUpdateAsync(code.UserId, token);
                         if (!CanUseMcp(user) || user!.SecurityStamp != code.SecurityStamp)
+                        {
                             return null;
+                        }
 
                         var now = clock.GetUtcNow().UtcDateTime;
-                        var issued = await tokenService.IssueAsync(user, Guid.NewGuid(), now, now.AddDays(jwtSettings.RefreshTokenLifetimeDays), token,
-                            new OAuthTokenContext(issuer.AbsoluteUri, resource, clientId, code.Scope));
+                        var issued = await tokenService.IssueAsync(user, Guid.NewGuid(), now, now.AddDays(jwtSettings.RefreshTokenLifetimeDays), token, new OAuthTokenContext(issuer.AbsoluteUri, resource, clientId, code.Scope));
                         return issued.Result;
                     }, ct);
                     return TokenResponse(result);
@@ -191,11 +209,12 @@ namespace UluBilge.Api.Extentions
                     var command = new RefreshTokenAsync.Command
                     {
                         RefreshToken = form["refresh_token"].ToString(),
-                        OAuth = new OAuthTokenContext(issuer.AbsoluteUri, resource, clientId,
-                            form.TryGetValue("scope", out var scope) ? scope.ToString() : null)
+                        OAuth = new OAuthTokenContext(issuer.AbsoluteUri, resource, clientId, form.TryGetValue("scope", out var scope) ? scope.ToString() : null)
                     };
                     if (!Validator.TryValidateObject(command, new ValidationContext(command), [], true))
+                    {
                         return OAuthError("invalid_grant", "Refresh token geçersiz veya süresi dolmuş.");
+                    }
 
                     try
                     {
@@ -224,29 +243,36 @@ namespace UluBilge.Api.Extentions
 
             return app;
 
-            async Task<IResult> AuthorizeAsync(HttpContext context, IAntiforgery antiforgery,
-                IAsyncCommandHandler<LoginAsync.Command, LoginAsync.Result?> loginHandler,
-                IOptionsMonitor<JwtBearerOptions> jwtOptions, IUserRepository users, IUnitOfWork work, CancellationToken ct)
+            async Task<IResult> AuthorizeAsync(HttpContext context, IAntiforgery antiforgery, IAsyncCommandHandler<LoginAsync.Command, LoginAsync.Result?> loginHandler, IOptionsMonitor<JwtBearerOptions> jwtOptions, IUserRepository users, IOAuthClientRepository clients, IUnitOfWork work, CancellationToken ct)
             {
                 NoStore(context);
                 if (!HttpMethods.IsGet(context.Request.Method) && !context.Request.HasFormContentType)
+                {
                     return OAuthError("invalid_request", "Form gövdesi gereklidir.");
+                }
                 var values = HttpMethods.IsGet(context.Request.Method) ? context.Request.Query.AsEnumerable() : (await context.Request.ReadFormAsync(ct)).AsEnumerable();
                 if (values.Any(field => field.Value.Count != 1 || field.Value.ToString().Length > 4096))
+                {
                     return OAuthError("invalid_request", "Geçersiz veya tekrarlanan parametre.");
+                }
                 var fields = values.ToDictionary(field => field.Key, field => field.Value.ToString(), StringComparer.Ordinal);
                 var clientId = fields.GetValueOrDefault("client_id", "");
                 var redirectUri = fields.GetValueOrDefault("redirect_uri", "");
-                if (!registeredClients.TryGetValue(clientId, out var client))
+                var client = clientId.Length is > 0 and <= 128 ? await FindActiveClientAsync(clients, work, clientId, ct) : null;
+                if (client is null)
                 {
-                    return OAuthError("invalid_request", "İstemci kayıtlı değil.");
+                    return OAuthError("invalid_request", "İstemci kayıtlı değil veya devre dışı.");
                 }
-                if (!client.RedirectUris.Contains(redirectUri, StringComparer.Ordinal))
+                if (!IsAllowedRedirectUri(redirectUri) || !client.RedirectUris.Any(registered => MatchesRedirectUri(registered, redirectUri)))
                 {
                     return OAuthError("invalid_request", "Dönüş adresi kayıtlı değil.");
                 }
-                if (fields.GetValueOrDefault("response_type") != "code") return OAuthError("unsupported_response_type", "Yalnızca code desteklenir.");
-                if (fields.GetValueOrDefault("resource") != resource) return OAuthError("invalid_target", "İstenen kaynak bu MCP sunucusuna ait değil.");
+                if (fields.GetValueOrDefault("response_type") != "code") 
+                    { return OAuthError("unsupported_response_type", "Yalnızca code desteklenir."); 
+                }
+                if (fields.GetValueOrDefault("resource") != resource) 
+                    { return OAuthError("invalid_target", "İstenen kaynak bu MCP sunucusuna ait değil."); 
+                }
                 var scopes = fields.GetValueOrDefault("scope", "mcp:tools").Split(' ', StringSplitOptions.RemoveEmptyEntries).Distinct().ToArray();
                 if (!scopes.Contains("mcp:tools") || scopes.Any(scope => scope is not ("mcp:tools" or "offline_access")))
                     return OAuthError("invalid_scope", "mcp:tools kapsamı gereklidir; offline_access isteğe bağlıdır.");
@@ -336,16 +362,36 @@ namespace UluBilge.Api.Extentions
             static void NoStore(HttpContext context) { context.Response.Headers.CacheControl = "no-store"; context.Response.Headers.Pragma = "no-cache"; }
         }
 
-        private static bool IsAllowedRedirectUri(string? value, bool development) => value?.Length <= 2048 && Uri.TryCreate(value, UriKind.Absolute, out var uri)
-            && uri.Fragment == "" && uri.UserInfo == "" && (uri.Scheme == "https" || (development
-                && uri.Scheme == "http" && uri.IsLoopback && uri.HostNameType is UriHostNameType.IPv4 or UriHostNameType.IPv6));
+        private static async Task<OAuthClient?> FindActiveClientAsync(IOAuthClientRepository clients, IUnitOfWork work, string clientId, CancellationToken ct)
+        {
+            // Kayıt ve devre dışı bırakma kararlarında gecikebilen okuma replikası yerine yazma veritabanı kullanılır.
+            var client = await work.ExecuteCommandAsync(token => clients.GetByClientIdAsync(clientId, token), ct);
+            return client is { IsActive: true } ? client : null;
+        }
 
-        private sealed record OAuthState(string ServerUrl, Uri Issuer, ConcurrentDictionary<string, OAuthClient> Clients)
+        private static bool IsAllowedRedirectUri(string? value) => value?.Length <= 2048 && Uri.TryCreate(value, UriKind.Absolute, out var uri)
+            && uri.Fragment == "" && uri.UserInfo == "" && (uri.Scheme == "https" || IsHttpLoopbackUri(uri));
+
+        private static bool IsHttpLoopbackUri(Uri uri) => uri.Scheme == "http" && uri.IsLoopback
+            && uri.HostNameType is UriHostNameType.IPv4 or UriHostNameType.IPv6;
+
+        private static bool MatchesRedirectUri(string registered, string requested)
+        {
+            if (string.Equals(registered, requested, StringComparison.Ordinal)) return true;
+            if (!Uri.TryCreate(registered, UriKind.Absolute, out var registeredUri) || !IsHttpLoopbackUri(registeredUri)
+                || !Uri.TryCreate(requested, UriKind.Absolute, out var requestedUri) || !IsHttpLoopbackUri(requestedUri)) return false;
+
+            // RFC 8252: HTTP loopback dönüş adreslerinde yalnızca port farklı olabilir; kalan metin birebir eşleşir.
+            const string authorityPattern = @"\A(http://(?:\[[^\]]+\]|[^:/?#]+))(?::[0-9]+)?";
+            return string.Equals(Regex.Replace(registered, authorityPattern, "$1", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant),
+                Regex.Replace(requested, authorityPattern, "$1", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant), StringComparison.Ordinal);
+        }
+
+        private sealed record OAuthState(string ServerUrl, Uri Issuer)
         {
             public ConcurrentDictionary<string, AuthCodeData> AuthCodes { get; } = new();
         }
 
-        private sealed record OAuthClient(string ClientId, string DisplayName, string[] RedirectUris);
         private sealed record AuthCodeData(int UserId, Guid SecurityStamp, string ClientId, string RedirectUri, string CodeChallenge, string Scope, DateTimeOffset ExpiresAt);
         private sealed record ClientRegistration(
             [property: JsonPropertyName("redirect_uris")] string[]? RedirectUris,

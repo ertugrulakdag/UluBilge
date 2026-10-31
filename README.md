@@ -202,25 +202,27 @@ kodu PKCE `S256` doğrulamasıyla token'a çevirir → `/mcp` isteklerini
 de keşif belgesindeki MCP adresiyle aynı olmalıdır.
 
 `appsettings.json` içindeki `OAuth:ServerUrl` başlangıçta `https://localhost:7187`.
-Kaynak adresi bunun sonuna `/mcp` eklenerek oluşur. İstemcileri eklerken:
+Kaynak adresi bunun sonuna `/mcp` eklenerek oluşur. İstemciler `/oauth/register`
+üzerinden `redirect_uris` ve isteğe bağlı `client_name` göndererek kalıcı client ID
+alır. API, istemciyi `dbo.OAuthClients`, dönüş adreslerini
+`dbo.OAuthClientRedirectUris` tablolarına aynı transaction içinde kaydeder.
+`20261031T0900_OAuthClients.sql` migration'ı uygulanmış olmalıdır.
+`OAuth:Clients` veya `OAuth:DevelopmentClients` yapılandırması kullanılmaz.
 
-| İstemci | OAuth client ID | Tanımlı callback |
-| --- | --- | --- |
-| ChatGPT | `ulubilge-chatgpt` | `https://chatgpt.com/connector_platform_oauth_redirect` |
-| Claude | `ulubilge-claude` | `https://claude.ai/api/mcp/auth_callback` |
+Bu akış yalnızca public istemcileri destekler; client secret boş bırakılır,
+PKCE `S256` zorunludur. Dinamik kayıt desteklemeyen istemciler için önceden
+veritabanına kayıt oluşturulmalı ve aynı client ID istemciye tanımlanmalıdır.
+Kayıt dönüş adresleri HTTPS olmalıdır; masaüstü uygulamalarının HTTP loopback IP
+adresleri de tüm ortamlarda kabul edilir. Yetkilendirmede dönüş adresi kayıtlı
+tam adresle birebir eşleşir. [RFC 8252](https://www.rfc-editor.org/rfc/rfc8252.html#section-7.3)
+gereği HTTP loopback adreslerinde yalnızca port farklı olabilir; IP, yol ve sorgu
+aynı kalmalıdır. HTTP üzerinden uzak sunucuya veya `localhost` adına dönüş kabul
+edilmez. Joker adres kullanılmaz.
 
-ChatGPT veya Claude'un bağlantı ayarlarında **kendi OAuth istemcini kullan**
-seçeneğini ve ilgili client ID'yi girin. Başlangıçtaki istemciler public client'tır;
-client secret boş bırakılır, PKCE `S256` zorunludur. Bu sade akış yalnızca public
-istemcileri destekler. Dinamik kayıt destekleyen istemciler `/oauth/register`
-üzerinden `redirect_uris` ve isteğe bağlı `client_name` göndererek client ID alır.
-Kayıt dönüş adresleri HTTPS olmalıdır; yalnızca Development ortamında HTTP
-loopback IP adresleri de kabul edilir. Yetkilendirme sırasında dönüş adresi,
-kaydedilmiş tam adreslerden biriyle birebir eşleşmelidir.
-
-Callback adresi istemcinin yönetim sayfasında farklı görünüyorsa, gösterilen
-**tam adresi** ilgili `RedirectUris` listesine ekleyin. Joker adres kullanmayın.
-Başka istemciler de aynı listeye ayrı client ID ve callback ile eklenebilir.
+Yetkilendirme ve token istekleri istemciyi yazma veritabanından tekrar okur;
+`IsActive = 0` olan istemci yeni yetkilendirme ve token yenileme işlemi yapamaz.
+En fazla 1000 aktif istemci kaydedilebilir; devre dışı bırakılan kayıtlar bu
+sınırı tüketmez. Kayıt sınırı farklı API instance'ları arasında da atomik uygulanır.
 
 ChatGPT ve Claude'un bulut bağlantısı `localhost` adresine erişemez. Bağlantı
 kurmadan önce sunucuyu erişilebilir HTTPS adresinde yayınlayın ve `OAuth:ServerUrl`
@@ -250,15 +252,14 @@ command transaction'ında yapılır. Yanlış istemci veya REST/MCP endpoint'ind
 kullanım geçerli tokenı tüketmez. Scope genişletilemez; `offline_access`
 kaldırılırsa yalnızca access token döner ve refresh zinciri iptal edilir.
 
-Yapılandırmada tanımlı istemcilerin refresh token'ları uygulama yeniden
-başlatıldığında da kullanılabilir. Birden fazla instance aynı veritabanı,
-OAuth adresi, istemci yapılandırması ve imzalama anahtarını kullanmalıdır.
+İstemci kayıtları ve refresh token'ları uygulama yeniden başlatıldığında da
+korunur. Birden fazla instance aynı yazma veritabanı, OAuth adresi ve imzalama
+anahtarını kullanmalıdır.
 Authorization code'ların yalnızca SHA-256 özetleri bellekte tutulmaya devam eder;
 kodlar 2 dakika geçerlidir ve yalnızca bir kez tüketilir. Süresi dolmuş kodlar
-OAuth isteklerinde temizlenir. Dinamik istemci kayıtları da bellektedir;
-en fazla 1000 toplam istemci kabul edilir. Yeniden başlatmada dinamik istemcilerin
-tekrar kaydolup izin alması gerekir; devam eden kod değişimi de kodu üreten
-instance'a ulaşmalıdır. Mevcut access token'lar, aynı imzalama anahtarı
+OAuth isteklerinde temizlenir. Devam eden kod değişimi kodu üreten instance'a
+ulaşmalıdır; yeniden başlatmada henüz tüketilmemiş kodlar için giriş tekrarlanır.
+Mevcut access token'lar, aynı imzalama anahtarı
 kullanılıyorsa süreleri bitene kadar geçerlidir.
 
 Production'da mevcut `Jwt:SigningKeyBase64` değerini secret store veya ortam
@@ -313,7 +314,7 @@ Yapılandırma biçimi [MCP'nin Claude Desktop rehberinde](https://modelcontextp
 ve [mcp-remote kullanım örneğinde](https://github.com/geelen/mcp-remote#usage) açıklanır.
 
 Bu projede `--host 127.0.0.1` gereklidir: `mcp-remote` varsayılan olarak
-`localhost` dönüş adresi üretir; uygulama Development ortamında HTTP dönüş
+`localhost` dönüş adresi üretir; uygulama HTTP dönüş
 adresleri için loopback IP ister. Köprü `/oauth/register` üzerinden dinamik
 istemci kaydı yapar. `resource` ve `mcp:tools offline_access` kapsamları sunucunun
 metadata belgelerinden bulunur. Bu örnekte sabit client ID veya callback portu
@@ -326,9 +327,9 @@ dotnet run --project src/UluBilge.Api --launch-profile https
 ```
 
 Bağlantı `Claude Desktop → mcp-remote → https://localhost:7187/mcp` şeklindedir;
-`mcp-remote`, çalışan API'ye bağlanır. API'nin Development ortamında çalışması
-yerel HTTP callback için gereklidir; `/mcp` HTTPS, OAuth, PKCE, scope ve rol
-denetimlerini kullanır.
+`mcp-remote`, çalışan API'ye bağlanır. Yerel `https://localhost:7187` sunucu adresi
+Development ortamında kullanılır; `/mcp` HTTPS, OAuth, PKCE, scope ve rol
+denetimlerini kullanır. HTTP loopback callback yayındaki HTTPS sunucuyla da kullanılabilir.
 
 Node.js yerel HTTPS sertifikasına güvenmiyorsa, geliştirme sertifikasının açık
 PEM kopyasını oluşturun ve `ulu-bilge-tool` nesnesine, `command` ve `args` ile aynı
@@ -348,10 +349,10 @@ ilgili araçların belgelerinde açıklanır.
 Kaydettikten sonra Claude Desktop'ı tamamen kapatıp yeniden açın. İlk bağlantıda
 tarayıcıdaki UluBilge formunda giriş yapıp izin verin; kullanıcının `Report` veya
 `Admin` rolü olmalıdır. Ardından Claude'dan `get_product_sales` aracını kullanmasını
-isteyin. Bu örnekteki dinamik istemci kaydı API yeniden başlatıldığında bellekten
-silinir; bağlantının yeniden kaydolup yetkilendirilmesi gerekir. Yapılandırmada
-tanımlı sabit istemcilerin refresh token'ları veritabanında korunur. Eski istemci bilgisi önbellekte
-kalırsa yalnızca bu sunucuya ait `mcp-remote` kaydını yenileyin. Köprünün varsayılan
+isteyin. Dinamik istemci kaydı ve refresh token veritabanında korunur; API'nin
+yeniden başlaması istemci kaydını silmez. Eski bellek/yapılandırma kayıtlarından
+geçerken, önbellekteki client ID veritabanında yoksa yalnızca bu sunucuya ait
+`mcp-remote` OAuth kaydını bir kez yenileyip yeniden bağlanın. Köprünün varsayılan
 OAuth önbelleği kullanıcı dizinindeki `.mcp-auth` klasöründedir.
 
 Auth ve Region controller testleri çalışan API'ye HTTP isteği gönderir.

@@ -30,8 +30,8 @@ API'nin giriş sınırı dakikada 10 istektir. Controller testleri toplam 5 giri
 
 `McpOAuthRefreshTests`, gerçek SQL repository'leri ve ortak `RefreshTokenAsync`
 handler'ını TestServer üzerindeki OAuth endpoint'leriyle çalıştırır. Testin
-oluşturduğu `UluBilgeOAuthTests_<guid>` veritabanına yalnızca kullanıcı/token
-migration'ları uygulanır; test sonunda bu veritabanı silinir. Uygulamanın mevcut
+oluşturduğu `UluBilgeOAuthTests_<guid>` veritabanına kullanıcı/token migration'ları
+ve `20261031T0900_OAuthClients.sql` uygulanır; test sonunda bu veritabanı silinir. Uygulamanın mevcut
 veritabanı değiştirilmez. SQL hesabının geçici veritabanı oluşturma/silme yetkisi
 olmalıdır. Bağlantı varsayılan olarak API `appsettings.json` dosyasından alınır;
 `ULUBILGE_TEST_CONNECTION` ile değiştirilebilir. Çalışan API gerekmez:
@@ -40,10 +40,16 @@ olmalıdır. Bağlantı varsayılan olarak API `appsettings.json` dosyasından a
 dotnet test test/UluBilge.Test/UluBilge.Test.csproj -c Release --filter FullyQualifiedName~McpOAuthRefreshTests
 ```
 
-Testler PKCE kod değişimini, hash ve OAuth bağlamının kalıcı kaydını, gerçek MCP
-erişimini, yeni host'ta yenilemeyi, rotasyon/replay ve eşzamanlı kullanımı,
-REST/MCP/istemci ayrımını, scope daraltmayı ve kullanıcı güvenlik değişikliklerini
-kontrol eder.
+İstemciler `/oauth/register` üzerinden dinamik kaydedilir; `OAuth:Clients` ayarı
+kullanılmaz. Testler istemci/dönüş adresi kayıtlarının SQL'de kalıcılığını ve yeni
+host'ta yetkilendirme/yenilemeyi, devre dışı ve bilinmeyen istemcilerin reddini,
+istemci kimliği ve dönüş adreslerinin birebir eşleşmesini kontrol eder. Production
+ortamında masaüstü HTTP loopback dönüş adresinde yalnızca port değişimine izin
+verildiği, uzak HTTP adreslerinin reddedildiği ve 1000 aktif istemci sınırının
+iki host'tan eşzamanlı kayıtta da aşılmadığı doğrulanır. Devre dışı kayıtlar bu
+sınırı tüketmez. Ayrıca PKCE kod değişimi, hash ve OAuth bağlamının kalıcı kaydı,
+gerçek MCP erişimi, rotasyon/replay ve eşzamanlı yenileme, REST/MCP/istemci ayrımı,
+scope daraltma ve kullanıcı güvenlik değişiklikleri kontrol edilir.
 
 `McpTransportAuthenticationTests`, API'nin gerçek OAuth ve MCP servis kayıtlarını
 `TestServer` üzerinde çalıştırır. SQL Server bağlantısı açmadan, geçerli MCP token'ıyla
