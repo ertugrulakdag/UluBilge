@@ -355,7 +355,9 @@ namespace UluBilge.Api.Extentions
             static IResult TokenResponse(LoginAsync.Result? tokens)
             {
                 if (tokens is null)
+                {
                     return OAuthError("invalid_grant", "Oturum geçersiz veya süresi dolmuş. Yeniden giriş yapın.");
+                }
 
                 var result = new Dictionary<string, object>
                 {
@@ -365,7 +367,9 @@ namespace UluBilge.Api.Extentions
                     ["scope"] = tokens.Scope ?? string.Empty
                 };
                 if (!string.IsNullOrEmpty(tokens.RefreshToken))
+                {
                     result["refresh_token"] = tokens.RefreshToken;
+                }
                 return Results.Json(result);
             }
 
@@ -393,11 +397,9 @@ namespace UluBilge.Api.Extentions
             return client is { IsActive: true } ? client : null;
         }
 
-        private static bool IsAllowedRedirectUri(string? value) => value?.Length <= 2048 && Uri.TryCreate(value, UriKind.Absolute, out var uri)
-            && uri.Fragment == "" && uri.UserInfo == "" && (uri.Scheme == "https" || IsHttpLoopbackUri(uri));
+        private static bool IsAllowedRedirectUri(string? value) => value?.Length <= 2048 && Uri.TryCreate(value, UriKind.Absolute, out var uri) && uri.Fragment == "" && uri.UserInfo == "" && (uri.Scheme == "https" || IsHttpLoopbackUri(uri));
 
-        private static bool IsHttpLoopbackUri(Uri uri) => uri.Scheme == "http" && uri.IsLoopback
-            && uri.HostNameType is UriHostNameType.IPv4 or UriHostNameType.IPv6;
+        private static bool IsHttpLoopbackUri(Uri uri) => uri.Scheme == "http" && uri.IsLoopback && uri.HostNameType is UriHostNameType.IPv4 or UriHostNameType.IPv6;
 
         private static bool MatchesRedirectUri(string registered, string requested)
         {
