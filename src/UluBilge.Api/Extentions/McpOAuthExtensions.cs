@@ -42,7 +42,9 @@ namespace UluBilge.Api.Extentions
             if (clients.Any(client => string.IsNullOrWhiteSpace(client.ClientId) || client.ClientId.Length > 128 || client.RedirectUris.Length == 0
                 || client.RedirectUris.Any(uri => !IsAllowedRedirectUri(uri, environment.IsDevelopment())))
                 || clients.Select(client => client.ClientId).Distinct(StringComparer.Ordinal).Count() != clients.Length)
+            {
                 throw new InvalidOperationException("OAuth istemcileri için benzersiz ClientId ve tam HTTPS RedirectUris adresleri gereklidir. Development ortamında HTTP loopback IP adresleri de kullanılabilir.");
+            }
 
             var registeredClients = new ConcurrentDictionary<string, OAuthClient>(clients.ToDictionary(client => client.ClientId, StringComparer.Ordinal));
             services.TryAddSingleton(TimeProvider.System);
@@ -58,10 +60,19 @@ namespace UluBilge.Api.Extentions
                 options.IncludeErrorDetails = false;
                 options.TokenValidationParameters = new TokenValidationParameters
                 {
-                    ValidIssuer = issuer.AbsoluteUri, ValidAudience = resource, IssuerSigningKey = signing.Key,
-                    ValidateIssuer = true, ValidateAudience = true, ValidateIssuerSigningKey = true, ValidateLifetime = true,
-                    RequireExpirationTime = true, RequireSignedTokens = true, ValidAlgorithms = [signing.Algorithm],
-                    NameClaimType = "name", RoleClaimType = JwtOptions.RoleClaimType, ClockSkew = TimeSpan.FromSeconds(15),
+                    ValidIssuer = issuer.AbsoluteUri,
+                    ValidAudience = resource,
+                    IssuerSigningKey = signing.Key,
+                    ValidateIssuer = true,
+                    ValidateAudience = true,
+                    ValidateIssuerSigningKey = true,
+                    ValidateLifetime = true,
+                    RequireExpirationTime = true,
+                    RequireSignedTokens = true,
+                    ValidAlgorithms = [signing.Algorithm],
+                    NameClaimType = "name",
+                    RoleClaimType = JwtOptions.RoleClaimType,
+                    ClockSkew = TimeSpan.FromSeconds(15),
                     LifetimeValidator = (start, end, _, parameters) => end.HasValue && (!start.HasValue || start <= end)
                         && (!start.HasValue || start <= clock.GetUtcNow().UtcDateTime + parameters.ClockSkew)
                         && end > clock.GetUtcNow().UtcDateTime - parameters.ClockSkew
@@ -127,8 +138,12 @@ namespace UluBilge.Api.Extentions
                 registeredClients[client.ClientId] = client;
                 return Results.Json(new
                 {
-                    client_id = client.ClientId, client_name = client.DisplayName, redirect_uris = client.RedirectUris,
-                    grant_types = new[] { "authorization_code", "refresh_token" }, response_types = new[] { "code" }, token_endpoint_auth_method = "none"
+                    client_id = client.ClientId,
+                    client_name = client.DisplayName,
+                    redirect_uris = client.RedirectUris,
+                    grant_types = new[] { "authorization_code", "refresh_token" },
+                    response_types = new[] { "code" },
+                    token_endpoint_auth_method = "none"
                 }, statusCode: StatusCodes.Status201Created);
             }).AllowAnonymous().RequireRateLimiting("oauth-token").ExcludeFromDescription();
 
@@ -222,8 +237,14 @@ namespace UluBilge.Api.Extentions
                 var fields = values.ToDictionary(field => field.Key, field => field.Value.ToString(), StringComparer.Ordinal);
                 var clientId = fields.GetValueOrDefault("client_id", "");
                 var redirectUri = fields.GetValueOrDefault("redirect_uri", "");
-                if (!registeredClients.TryGetValue(clientId, out var client) || !client.RedirectUris.Contains(redirectUri, StringComparer.Ordinal))
-                    return OAuthError("invalid_request", "İstemci veya dönüş adresi kayıtlı değil.");
+                if (!registeredClients.TryGetValue(clientId, out var client))
+                {
+                    return OAuthError("invalid_request", "İstemci kayıtlı değil.");
+                }
+                if (!client.RedirectUris.Contains(redirectUri, StringComparer.Ordinal))
+                {
+                    return OAuthError("invalid_request", "Dönüş adresi kayıtlı değil.");
+                }
                 if (fields.GetValueOrDefault("response_type") != "code") return OAuthError("unsupported_response_type", "Yalnızca code desteklenir.");
                 if (fields.GetValueOrDefault("resource") != resource) return OAuthError("invalid_target", "İstenen kaynak bu MCP sunucusuna ait değil.");
                 var scopes = fields.GetValueOrDefault("scope", "mcp:tools").Split(' ', StringSplitOptions.RemoveEmptyEntries).Distinct().ToArray();
@@ -288,8 +309,10 @@ namespace UluBilge.Api.Extentions
 
                 var result = new Dictionary<string, object>
                 {
-                    ["access_token"] = tokens.AccessToken, ["token_type"] = tokens.TokenType,
-                    ["expires_in"] = tokens.ExpiresIn, ["scope"] = tokens.Scope ?? string.Empty
+                    ["access_token"] = tokens.AccessToken,
+                    ["token_type"] = tokens.TokenType,
+                    ["expires_in"] = tokens.ExpiresIn,
+                    ["scope"] = tokens.Scope ?? string.Empty
                 };
                 if (!string.IsNullOrEmpty(tokens.RefreshToken))
                     result["refresh_token"] = tokens.RefreshToken;
