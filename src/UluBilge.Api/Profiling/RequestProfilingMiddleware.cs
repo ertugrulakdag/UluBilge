@@ -1,5 +1,7 @@
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Unicode;
 using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.Extensions.Options;
 using StackExchange.Profiling;
@@ -10,7 +12,11 @@ namespace UluBilge.Api.Profiling
     public sealed class RequestProfilingMiddleware(RequestDelegate next, IOptions<MiniProfilerOptions> options)
     {
         private const int BodyLimit = 16 * 1024;
-        private static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
+        private static readonly JsonSerializerOptions Json = new()
+        {
+            WriteIndented = true,
+            Encoder = JavaScriptEncoder.Create(UnicodeRanges.All)
+        };
 
         public async Task InvokeAsync(HttpContext context)
         {
@@ -40,7 +46,7 @@ namespace UluBilge.Api.Profiling
             using (var timing = profiler.CustomTiming("http", JsonSerializer.Serialize(new
             {
                 request.Method, Url = request.GetEncodedUrl(), request.Protocol, request.ContentType,
-                request.ContentLength, request.Headers, Body = body
+                request.ContentLength, request.Headers, Body = FormatBody(body)
             }, Json), "Request", includeStackTrace: false)) { }
 
             var originalBody = context.Response.Body;
@@ -71,7 +77,7 @@ namespace UluBilge.Api.Profiling
                     {
                         StatusCode = status, context.Response.ContentType, context.Response.ContentLength,
                         context.Response.Headers,
-                        Body = responseBody is null ? null : Encoding.UTF8.GetString(responseBody.GetBuffer(), 0, (int)Math.Min(responseBody.Length, BodyLimit))
+                        Body = responseBody is null ? null : FormatBody(Encoding.UTF8.GetString(responseBody.GetBuffer(), 0, (int)Math.Min(responseBody.Length, BodyLimit)))
                     }, Json), "Response", includeStackTrace: false)) { }
 
                     if (responseBody is not null)
@@ -84,6 +90,20 @@ namespace UluBilge.Api.Profiling
                 {
                     await profiler.StopAsync();
                 }
+            }
+        }
+
+        private static object? FormatBody(string? body)
+        {
+            if (string.IsNullOrWhiteSpace(body)) return body;
+            try
+            {
+                using var document = JsonDocument.Parse(body);
+                return document.RootElement.Clone();
+            }
+            catch (JsonException)
+            {
+                return body;
             }
         }
     }

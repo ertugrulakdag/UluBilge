@@ -26,7 +26,9 @@ Hazır sonuç ekranı son 100 kaydı gösterir; depoda ayrıca adet sınırı uy
 Uygulama yeniden başlatıldığında kayıtlar kaybolur. Her API instance'ının kayıtları ayrıdır.
 
 Ayrıntı sayfasında metot, tam URL, HTTP protokolü, durum kodu, header'lar ve gövdeler
-görülür. Maskeleme yapılmaz. Uzunluğu bilinen ve 16 KB'ı aşmayan istek gövdeleri
+görülür. Maskeleme yapılmaz.
+JSON gövdeleri ayrıntılarda girintili nesne veya dizi olarak gösterilir; diğerleri
+metin olarak kalır. Uzunluğu bilinen ve 16 KB'ı aşmayan istek gövdeleri
 okunup başa sarılır. REST yanıtları MemoryStream üzerinden iletilir; ayrıntıya ilk
 16 KB yazılır. MCP yanıtları akış halinde devam eder, yalnızca yanıt bilgileri ve
 header'ları kaydedilir. MiniProfiler'ın kendi istekleri ölçülmez.
