@@ -16,6 +16,7 @@ using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using ModelContextProtocol.AspNetCore;
 using ModelContextProtocol.AspNetCore.Authentication;
+using UluBilge.Api.Authentication;
 using UluBilge.App.Authentication;
 using UluBilge.App.Commands.AuthHandler;
 using UluBilge.Core.Commands;
@@ -346,17 +347,8 @@ namespace UluBilge.Api.Extentions
                     var hiddenFields = fields.Where(field => field.Key is "client_id" or "redirect_uri" or "response_type" or "resource" or "scope" or "state" or "code_challenge" or "code_challenge_method").ToDictionary();
                     hiddenFields[csrf.FormFieldName] = csrf.RequestToken!;
                     var hidden = string.Join('\n', hiddenFields.Select(field => $"<input type=\"hidden\" name=\"{WebUtility.HtmlEncode(field.Key)}\" value=\"{WebUtility.HtmlEncode(field.Value)}\" />"));
-                    return Results.Content($$"""
-                        <!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>UluBilge bağlantısı</title>
-                        <style>body{font:16px system-ui;max-width:430px;margin:10vh auto;padding:24px}input{display:block;width:95%;padding:10px;margin:6px 0 18px}button{padding:10px 16px;margin:8px}.error{color:#b42318}</style></head>
-                        <body><h1>UluBilge'e bağlan</h1><p><strong>{{WebUtility.HtmlEncode(client.DisplayName)}}</strong>, sisteminizdeki raporlarını okumak için izin istiyor.</p>
-                        <p>{{(scopes.Contains("offline_access") ? $"Erişim en fazla {jwtSettings.RefreshTokenLifetimeDays} gün boyunca otomatik yenilenebilir." : "Erişim kısa süreliğine verilecektir.")}}</p>
-                        <p class="error" role="alert">{{WebUtility.HtmlEncode(error)}}</p><form method="post" action="/oauth/login">{{hidden}}
-                        <label>Kullanıcı adı<input name="userName" maxlength="64" autocomplete="username" required></label>
-                        <label>Parola<input type="password" name="password" maxlength="128" autocomplete="current-password" required></label>
-                        <button type="submit" name="decision" value="allow">Giriş yap ve izin ver</button><button type="submit" name="decision" value="deny" formnovalidate>İptal</button>
-                        </form></body></html>
-                        """, "text/html; charset=utf-8", Encoding.UTF8, status);
+                    var html = OAuthLoginPage.Render(client.DisplayName, scopes.Contains("offline_access"), jwtSettings.RefreshTokenLifetimeDays, hidden, error);
+                    return Results.Content(html, "text/html; charset=utf-8", Encoding.UTF8, status);
                 }
             }
 
