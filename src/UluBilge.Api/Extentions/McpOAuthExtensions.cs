@@ -1,13 +1,6 @@
-using System.Collections.Concurrent;
-using System.ComponentModel.DataAnnotations;
-using System.Net;
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json.Serialization;
-using System.Text.RegularExpressions;
-using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -16,6 +9,14 @@ using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using ModelContextProtocol.AspNetCore;
 using ModelContextProtocol.AspNetCore.Authentication;
+using System.Collections.Concurrent;
+using System.ComponentModel.DataAnnotations;
+using System.Net;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
+using System.Threading.RateLimiting;
 using UluBilge.Api.Authentication;
 using UluBilge.App.Authentication;
 using UluBilge.App.Commands.AuthHandler;
@@ -34,7 +35,11 @@ namespace UluBilge.Api.Extentions
             if (!Uri.TryCreate(serverUrl, UriKind.Absolute, out var issuer) || issuer.Scheme != "https"
                 || issuer.AbsolutePath != "/" || issuer.Query != "" || issuer.Fragment != "" || issuer.UserInfo != ""
                 || (!environment.IsDevelopment() && issuer.IsLoopback) || serverUrl.Length > 2044)
+            {
+#if !DEBUG
                 throw new InvalidOperationException("OAuth:ServerUrl, /mcp içermeyen bir HTTPS kök adresi olmalıdır. Production adresi localhost olamaz.");
+#endif
+            }
 
             var resource = serverUrl + "/mcp";
             services.TryAddSingleton(TimeProvider.System);
