@@ -18,245 +18,230 @@ namespace UluBilge.Api.Authentication
                 ? ""
                 : $"<div class=\"error\" id=\"login-error\" role=\"alert\">{WebUtility.HtmlEncode(error)}</div>";
 
-            return $$"""
+            return $$""" 
                 <!doctype html>
                 <html lang="tr">
                 <head>
                     <meta charset="utf-8">
                     <meta name="viewport" content="width=device-width, initial-scale=1">
-                    <title>Rapor erişimi · UluBilge</title>
+                    <title>Ulu Bilge Hesap bağlantısı</title>
                     <style>
                         :root {
                             color-scheme: light;
-                            font-family: "Segoe UI", system-ui, sans-serif;
-                            color: #292d28;
-                            background: #f5f2eb;
+                            font-family: Arial, "Helvetica Neue", sans-serif;
+                            color: #171e43;
+                            background: #2944ee;
                             font-synthesis: none;
-                            --muted: #65685f;
-                            --rule: #d6d4ca;
-                            --accent: #9a4d31;
+                            --ink: #171e43;
+                            --blue: #2944ee;
+                            --lime: #e9ff64;
+                            --pink: #ffd3e5;
+                            --paper: #fffdf7;
                         }
 
                         * { box-sizing: border-box; }
                         body { margin: 0; }
-                        h1, h2, p, dl, dd { margin: 0; }
+                        h1, h2, p { margin: 0; }
                         button, input { font: inherit; }
+                        svg { display: block; flex-shrink: 0; }
 
                         .page {
                             display: flex;
                             flex-direction: column;
+                            width: 100%;
+                            max-width: 1224px;
                             min-height: 100vh;
                             min-height: 100svh;
-                            max-width: 1280px;
                             margin: 0 auto;
-                            padding: 0 64px;
+                            padding: 0 32px 32px;
                         }
 
                         .masthead {
                             display: flex;
-                            align-items: baseline;
+                            align-items: center;
                             justify-content: space-between;
                             gap: 24px;
-                            padding: 30px 0 24px;
-                            border-bottom: 1px solid var(--rule);
+                            padding: 24px 0;
+                            color: #fff;
                         }
-
-                        .wordmark {
-                            font-size: 23px;
-                            font-weight: 650;
-                            letter-spacing: -.9px;
-                        }
-
-                        .wordmark span { color: var(--accent); }
-                        .product-name { color: var(--muted); font-size: 13px; }
+                        .wordmark { font-size: 25px; font-weight: 700; letter-spacing: -1.2px; }
+                        .wordmark span { color: var(--pink); }
+                        .page-caption { font-size: 12px; letter-spacing: .1px; }
 
                         main {
+                            display: grid;
+                            grid-template-columns: minmax(0, 1.08fr) minmax(0, 1fr);
+                            flex: 1;
                             width: 100%;
-                            max-width: 944px;
-                            margin: 64px auto 72px;
+                            border: 2px solid var(--ink);
+                            border-radius: 3px;
+                            overflow: hidden;
+                            background: var(--paper);
                         }
 
-                        .page-label {
-                            display: flex;
-                            align-items: center;
-                            gap: 10px;
-                            margin-bottom: 18px;
-                            color: var(--accent);
-                            font-size: 13px;
-                            font-weight: 600;
+                        .poster {
+                            position: relative;
+                            min-height: 590px;
+                            padding: 36px;
+                            overflow: hidden;
+                            border-right: 2px solid var(--ink);
+                            background: var(--lime);
                         }
-
-                        .page-label::before {
-                            width: 24px;
-                            height: 2px;
-                            background: currentColor;
-                            content: "";
+                        .poster-label { font-size: 13px; font-weight: 700; }
+                        .poster h2 {
+                            position: relative;
+                            z-index: 1;
+                            margin-top: 32px;
+                            font-size: clamp(48px, 5.8vw, 76px);
+                            font-weight: 700;
+                            line-height: 1.02;
+                            letter-spacing: -.065em;
                         }
-
-                        h1 {
-                            max-width: 700px;
-                            font-family: Georgia, "Times New Roman", serif;
-                            font-size: clamp(34px, 3.8vw, 46px);
-                            font-weight: 400;
-                            line-height: 1.16;
-                            letter-spacing: -1.5px;
-                            text-wrap: balance;
-                        }
-
-                        .page-description {
-                            margin-top: 16px;
-                            color: var(--muted);
+                        .poster-copy {
+                            position: relative;
+                            z-index: 1;
+                            max-width: 285px;
+                            margin-top: 24px;
                             font-size: 14px;
                             line-height: 1.7;
                         }
-
-                        .authorization {
-                            display: grid;
-                            grid-template-columns: 1fr 1fr;
-                            margin-top: 36px;
-                            border-top: 2px solid #363d34;
-                            border-bottom: 1px solid var(--rule);
+                        .poster-art {
+                            position: absolute;
+                            right: 24px;
+                            bottom: -40px;
+                            width: 310px;
+                            transform: rotate(-12deg);
                         }
+                        .poster-art svg { width: 100%; height: auto; }
+
+                        .sign-in {
+                            display: flex;
+                            flex-direction: column;
+                            justify-content: center;
+                            min-width: 0;
+                            padding: 32px 36px;
+                        }
+                        h1 { font-size: 29px; font-weight: 700; line-height: 1.2; letter-spacing: -1px; }
+                        .description { margin-top: 8px; color: #53576d; font-size: 13px; line-height: 1.6; }
 
                         .request {
-                            min-width: 0;
-                            padding: 32px 48px 36px 0;
-                            border-right: 1px solid var(--rule);
+                            margin: 22px -36px 24px;
+                            padding: 15px 36px;
+                            border-top: 1px solid var(--ink);
+                            border-bottom: 1px solid var(--ink);
+                            background: var(--pink);
                         }
+                        .client-name { font-size: 14px; font-weight: 700; line-height: 1.5; overflow-wrap: anywhere; }
+                        .scope { margin-top: 3px; font-size: 13px; line-height: 1.6; }
+                        .duration { margin-top: 9px; color: #4b4058; font-size: 11px; line-height: 1.6; }
 
-                        .section-label { color: var(--muted); font-size: 12px; }
-
-                        .client-name {
-                            margin-top: 10px;
-                            font-size: 25px;
-                            font-weight: 600;
-                            line-height: 1.35;
-                            letter-spacing: -.6px;
-                            overflow-wrap: anywhere;
-                        }
-
-                        .request-description {
-                            max-width: 340px;
-                            margin-top: 12px;
-                            font-size: 14px;
-                            line-height: 1.75;
-                        }
-
-                        .permissions { margin-top: 28px; }
-
-                        .permission {
-                            display: grid;
-                            grid-template-columns: 104px minmax(0, 1fr);
-                            gap: 16px;
-                            padding: 16px 0;
-                            border-top: 1px solid var(--rule);
-                            font-size: 13px;
-                            line-height: 1.65;
-                        }
-
-                        dt { color: var(--muted); }
-
-                        .request-note {
-                            max-width: 340px;
-                            margin-top: 24px;
-                            color: var(--muted);
-                            font-size: 12px;
-                            line-height: 1.75;
-                        }
-
-                        .sign-in { min-width: 0; padding: 32px 0 36px 48px; }
-                        .sign-in h2 { font-size: 18px; font-weight: 600; letter-spacing: -.25px; }
-                        .sign-in-description { margin-top: 8px; color: var(--muted); font-size: 13px; line-height: 1.7; }
-                        form { margin-top: 26px; }
-                        .field + .field { margin-top: 20px; }
-                        label { display: block; margin-bottom: 9px; font-size: 13px; font-weight: 600; }
-
+                        .field + .field { margin-top: 18px; }
+                        label { display: block; margin-bottom: 8px; font-size: 13px; font-weight: 700; }
                         input {
+                            display: block;
                             width: 100%;
                             min-height: 48px;
-                            padding: 11px 12px;
-                            border: 1px solid #aaafa3;
-                            border-radius: 3px;
-                            color: #292d28;
-                            background: #fffefa;
+                            padding: 12px 14px;
+                            border: 1px solid #7f8192;
+                            border-radius: 2px;
+                            color: var(--ink);
+                            background: #fff;
                             font-size: 16px;
                         }
-
-                        input:hover { border-color: #747a6f; }
-                        input:focus-visible { border-color: var(--accent); outline: 2px solid var(--accent); outline-offset: 2px; }
+                        input:hover { border-color: var(--ink); }
+                        input:focus-visible { border-color: var(--blue); outline: 3px solid var(--blue); outline-offset: 2px; }
 
                         .error {
-                            margin-top: 22px;
+                            margin-bottom: 22px;
                             padding: 12px 14px;
-                            border-left: 3px solid #a13024;
-                            color: #8c271e;
-                            background: #f6e8e1;
+                            border: 1px solid #a0302b;
+                            border-radius: 2px;
+                            color: #8d2724;
+                            background: #fff0e9;
                             font-size: 13px;
-                            line-height: 1.7;
+                            line-height: 1.6;
                             overflow-wrap: anywhere;
                         }
 
                         .actions {
+                            display: grid;
+                            grid-template-columns: minmax(0, 1fr) auto;
+                            align-items: center;
+                            gap: 16px;
+                            margin-top: 26px;
+                        }
+                        button {
                             display: flex;
                             align-items: center;
+                            justify-content: center;
                             gap: 12px;
-                            margin-top: 28px;
-                        }
-
-                        button {
-                            min-height: 48px;
-                            padding: 12px 18px;
-                            border: 1px solid transparent;
-                            border-radius: 3px;
+                            min-height: 50px;
+                            padding: 12px 16px;
+                            border: 1px solid var(--ink);
+                            border-radius: 2px;
                             font-size: 13px;
-                            font-weight: 600;
+                            font-weight: 700;
                             line-height: 1.5;
                             cursor: pointer;
                         }
-
-                        button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-                        .allow { flex: 1; color: #fffefa; background: #343d33; }
-                        .allow:hover { background: #232c23; }
-                        .deny { color: #464c43; background: transparent; }
-                        .deny:hover { border-color: #bebfb3; background: #ebe9e0; }
-                        .form-note { margin-top: 18px; color: var(--muted); font-size: 12px; line-height: 1.75; }
-
-                        .page-footer {
-                            display: flex;
-                            justify-content: space-between;
-                            gap: 16px;
-                            margin-top: auto;
-                            padding: 20px 0 24px;
-                            color: var(--muted);
-                            font-size: 11px;
-                            line-height: 1.6;
+                        button:focus-visible { outline: 3px solid var(--blue); outline-offset: 3px; }
+                        .allow { justify-content: space-between; color: var(--ink); background: var(--lime); }
+                        .allow:hover { background: #d9ef4e; }
+                        .deny {
+                            min-width: 48px;
+                            padding-right: 0;
+                            padding-left: 0;
+                            border-color: transparent;
+                            color: #464b64;
+                            background: transparent;
+                            font-weight: 400;
+                            text-decoration: underline;
+                            text-underline-offset: 4px;
                         }
+                        .deny:hover { color: var(--blue); }
+                        .form-note { margin-top: 18px; color: #53576d; font-size: 11px; line-height: 1.65; }
 
-                        @media (max-width: 900px) {
-                            .page { padding: 0 32px; }
-                            main { margin-top: 48px; }
-                            .request { padding-right: 32px; }
-                            .sign-in { padding-left: 32px; }
-                            .permission { grid-template-columns: 88px minmax(0, 1fr); gap: 12px; }
-                            .actions { gap: 6px; }
-                            button { padding-right: 12px; padding-left: 12px; }
-                        }
-
-                        @media (max-width: 680px) {
-                            .page { padding: 0 24px; }
-                            .masthead { padding: 24px 0 20px; }
-                            .wordmark { font-size: 21px; }
-                            main { margin: 28px auto 32px; }
-                            .page-label { margin-bottom: 14px; }
-                            h1 { font-size: 32px; letter-spacing: -1px; }
-                            .page-description, .request-note { display: none; }
-                            .authorization { grid-template-columns: minmax(0, 1fr); margin-top: 28px; }
-                            .request { padding: 20px 0; border-right: 0; border-bottom: 1px solid var(--rule); }
-                            .client-name { font-size: 23px; }
-                            .permissions { margin-top: 16px; }
-                            .permission { grid-template-columns: 96px minmax(0, 1fr); padding: 12px 0; }
-                            .sign-in { padding: 28px 0; }
+                        @media (min-width: 801px) and (max-width: 980px) {
+                            .page { padding-right: 24px; padding-left: 24px; }
+                            .poster { padding: 28px; }
+                            .poster h2 { font-size: 54px; }
+                            .poster-art { right: 0; width: 275px; }
+                            .sign-in { padding-right: 28px; padding-left: 28px; }
+                            .request { margin-right: -28px; margin-left: -28px; padding-right: 28px; padding-left: 28px; }
                             .actions { gap: 12px; }
+                            button { gap: 8px; padding-right: 12px; padding-left: 12px; }
+                        }
+
+                        @media (max-width: 800px) {
+                            .page { max-width: 660px; padding: 0 24px 24px; }
+                            .masthead { padding: 22px 0; }
+                            main { display: block; flex: none; }
+                            .poster { min-height: 220px; padding: 28px; border-right: 0; border-bottom: 2px solid var(--ink); }
+                            .poster h2 { margin-top: 20px; font-size: 50px; }
+                            .poster-copy { display: none; }
+                            .poster-art { right: 22px; bottom: -60px; width: 220px; }
+                            .sign-in { padding: 30px 28px; }
+                            .request { margin-right: -28px; margin-left: -28px; padding-right: 28px; padding-left: 28px; }
+                        }
+
+                        @media (max-width: 640px) {
+                            .poster-art { display: none; }
+                        }
+
+                        @media (max-width: 540px) {
+                            .page { padding: 0 16px 20px; }
+                            .masthead { padding: 19px 0; }
+                            .wordmark { font-size: 23px; }
+                            .page-caption { font-size: 11px; }
+                            .poster { min-height: 0; padding: 22px 24px; }
+                            .poster-label { font-size: 12px; }
+                            .poster h2 { margin-top: 16px; font-size: 39px; line-height: 1; letter-spacing: -.06em; }
+                            .sign-in { padding: 26px 24px; }
+                            h1 { font-size: 27px; }
+                            .request { margin: 20px -24px 22px; padding: 13px 24px; }
+                            .actions { gap: 12px; margin-top: 24px; }
+                            button { gap: 8px; padding-right: 12px; padding-left: 12px; font-size: 12px; }
+                            .form-note { margin-top: 15px; }
                         }
 
                         @media (forced-colors: active) {
@@ -267,64 +252,57 @@ namespace UluBilge.Api.Authentication
                 <body>
                     <div class="page">
                         <header class="masthead">
-                            <div class="wordmark">UluBilge<span aria-hidden="true">.</span></div>
-                            <p class="product-name">Raporlama</p>
+                            <div class="wordmark">Ulu Bilge<span aria-hidden="true">.</span></div>
+                            <p class="page-caption">Raporlama / Hesap bağlantısı</p>
                         </header>
 
-                        <main aria-labelledby="page-title">
-                            <p class="page-label">Uygulama bağlantısı</p>
-                            <h1 id="page-title">Rapor erişimini onaylayın.</h1>
-                            <p class="page-description">Bir uygulamayı UluBilge hesabınıza bağlıyorsunuz.</p>
+                        <main>
+                            <section class="poster" aria-labelledby="poster-title">
+                                <p class="poster-label">Ulu Bilge Uygulama bağlantısı</p>
+                                <h2 id="poster-title">Raporlarınız.<br>İzninizle.</h2>
+                                <p class="poster-copy">Ulu Bilge hesabınızı kullandığınız uygulamaya bağlayın.</p>
+                                <div class="poster-art" aria-hidden="true">
+                                    <svg viewBox="0 0 300 310" fill="none">
+                                        <path d="M24 20h72v138c0 35 21 56 54 56s54-21 54-56V20h72v140c0 82-50 132-126 132S24 242 24 160V20Z" fill="#2944ee" />
+                                        <path d="M204 20h72v72h-72V20Z" fill="#ff8fba" />
+                                    </svg>
+                                </div>
+                            </section>
 
-                            <div class="authorization">
-                                <section class="request" aria-labelledby="client-name" id="access-summary">
-                                    <p class="section-label">Erişim isteyen uygulama</p>
-                                    <h2 class="client-name" id="client-name">{{WebUtility.HtmlEncode(clientName)}}</h2>
-                                    <p class="request-description">UluBilge hesabınızdaki raporları okumak istiyor.</p>
+                            <section class="sign-in" aria-labelledby="login-title">
+                                <h1 id="login-title">Giriş yapın</h1>
+                                <p class="description">Ulu Bilge hesabınızla devam edin.</p>
 
-                                    <dl class="permissions">
-                                        <div class="permission">
-                                            <dt>İstenen izin</dt>
-                                            <dd>Raporları okuma</dd>
-                                        </div>
-                                        <div class="permission">
-                                            <dt>Erişim süresi</dt>
-                                            <dd>{{accessDuration}}</dd>
-                                        </div>
-                                    </dl>
+                                <div class="request" id="access-summary">
+                                    <p class="client-name">{{WebUtility.HtmlEncode(clientName)}}</p>
+                                    <p class="scope">Raporlarınızı okumak için izin istiyor.</p>
+                                    <p class="duration">{{accessDuration}}</p>
+                                </div>
 
-                                    <p class="request-note">Bu bağlantıyı siz başlatmadıysanız izin vermeden iptal edebilirsiniz.</p>
-                                </section>
-
-                                <section class="sign-in" aria-labelledby="sign-in-title">
-                                    <h2 id="sign-in-title">Hesabınızı doğrulayın</h2>
-                                    <p class="sign-in-description">UluBilge kullanıcı adınızı ve parolanızı girin.</p>
-                                    {{errorMessage}}
-
-                                    <form method="post" action="/oauth/login" aria-describedby="access-summary{{(string.IsNullOrEmpty(error) ? "" : " login-error")}}">
-                                        {{hiddenFields}}
-                                        <div class="field">
-                                            <label for="userName">Kullanıcı adı</label>
-                                            <input id="userName" name="userName" maxlength="64" autocomplete="username" autocapitalize="none" spellcheck="false" required>
-                                        </div>
-                                        <div class="field">
-                                            <label for="password">Parola</label>
-                                            <input id="password" type="password" name="password" maxlength="128" autocomplete="current-password" required>
-                                        </div>
-                                        <div class="actions">
-                                            <button class="allow" type="submit" name="decision" value="allow">Giriş yap ve izin ver</button>
-                                            <button class="deny" type="submit" name="decision" value="deny" formnovalidate>İptal et</button>
-                                        </div>
-                                        <p class="form-note">Giriş yaptığınızda, belirtilen uygulamaya yukarıdaki erişim için izin vermiş olursunuz.</p>
-                                    </form>
-                                </section>
-                            </div>
+                                {{errorMessage}}
+                                <form method="post" action="/oauth/login" aria-describedby="access-summary{{(string.IsNullOrEmpty(error) ? "" : " login-error")}}">
+                                    {{hiddenFields}}
+                                    <div class="field">
+                                        <label for="userName">Kullanıcı adı</label>
+                                        <input id="userName" name="userName" maxlength="64" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+                                    </div>
+                                    <div class="field">
+                                        <label for="password">Parola</label>
+                                        <input id="password" type="password" name="password" maxlength="128" autocomplete="current-password" required>
+                                    </div>
+                                    <div class="actions">
+                                        <button class="allow" type="submit" name="decision" value="allow">
+                                            Giriş yap ve izin ver
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                                <path d="M4 12h15m-6-6 6 6-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                                            </svg>
+                                        </button>
+                                        <button class="deny" type="submit" name="decision" value="deny" formnovalidate>İptal et</button>
+                                    </div>
+                                    <p class="form-note">Giriş yaptığınızda, bu uygulamaya yukarıdaki erişim için izin vermiş olursunuz.</p>
+                                </form>
+                            </section>
                         </main>
-
-                        <footer class="page-footer">
-                            <span>UluBilge</span>
-                            <span>Hesap bağlantıları</span>
-                        </footer>
                     </div>
                 </body>
                 </html>
