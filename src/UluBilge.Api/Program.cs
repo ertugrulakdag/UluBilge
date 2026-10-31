@@ -12,6 +12,7 @@ builder.Services.AddControllers(TurkishApiMessages.ConfigureMvc)
     .ConfigureApiBehaviorOptions(TurkishApiMessages.ConfigureApiBehavior);
 
 builder.Services.AddApiOpenApi(builder.Environment);
+builder.Services.AddRequestProfiling();
 builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = TurkishApiMessages.CustomizeProblemDetails);
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddUluBilgeServices(builder.Configuration);
@@ -22,6 +23,7 @@ builder.Services.AddMcpServer().WithHttpTransport().WithToolsFromAssembly(typeof
 
 var app = builder.Build();
 
+app.UseRequestProfiling();
 app.UseExceptionHandler();
 app.UseStatusCodePages(context => Results.Problem(statusCode: context.HttpContext.Response.StatusCode, title: TurkishApiMessages.GetStatusTitle(context.HttpContext.Response.StatusCode)).ExecuteAsync(context.HttpContext));
 
@@ -47,6 +49,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseMiniProfiler();
 app.UseRouting();
 app.UseRateLimiter();
 app.UseAuthentication();

@@ -12,6 +12,25 @@
 
 Bağımlılık yönü `Api → App → Data → Core` şeklindedir.
 
+## MiniProfiler
+
+Tamamlanan REST, Auth, OAuth ve MCP istekleri MiniProfiler ile ölçülür. Listeyi
+`/mini-profile/results-index` adresinden açabilirsiniz. Liste, ayrıntılar ve
+MiniProfiler kaynakları Development, Test ve Production ortamlarında giriş
+gerektirmeden erişilebilir; mevcut HTTPS kuralları uygulanmaya devam eder.
+
+Entegrasyon iki dosyadır: `MiniProfilerExtensions` servisleri, koyu temayı ve sonuç
+ekranını ayarlar; `RequestProfilingMiddleware` isteği ölçüp Request ve Response
+ayrıntılarını ekler. MiniProfiler'ın hazır RAM deposu 24 saatlik süreyle kullanılır.
+Hazır sonuç ekranı son 100 kaydı gösterir; depoda ayrıca adet sınırı uygulanmaz.
+Uygulama yeniden başlatıldığında kayıtlar kaybolur. Her API instance'ının kayıtları ayrıdır.
+
+Ayrıntı sayfasında metot, tam URL, HTTP protokolü, durum kodu, header'lar ve gövdeler
+görülür. Maskeleme yapılmaz. Uzunluğu bilinen ve 16 KB'ı aşmayan istek gövdeleri
+okunup başa sarılır. REST yanıtları MemoryStream üzerinden iletilir; ayrıntıya ilk
+16 KB yazılır. MCP yanıtları akış halinde devam eder, yalnızca yanıt bilgileri ve
+header'ları kaydedilir. MiniProfiler'ın kendi istekleri ölçülmez.
+
 ## Bağlantılar ve Unit of Work
 
 `src/UluBilge.Api/appsettings.json` içinde iki bağlantı bulunur:
