@@ -267,43 +267,75 @@ namespace UluBilge.Api.Extentions
                 {
                     return OAuthError("invalid_request", "Dönüş adresi kayıtlı değil.");
                 }
-                if (fields.GetValueOrDefault("response_type") != "code") 
-                    { return OAuthError("unsupported_response_type", "Yalnızca code desteklenir."); 
+                if (fields.GetValueOrDefault("response_type") != "code")
+                {
+                    return OAuthError("unsupported_response_type", "Yalnızca code desteklenir.");
                 }
-                if (fields.GetValueOrDefault("resource") != resource) 
-                    { return OAuthError("invalid_target", "İstenen kaynak bu MCP sunucusuna ait değil."); 
+                if (fields.GetValueOrDefault("resource") != resource)
+                {
+                    return OAuthError("invalid_target", "İstenen kaynak bu MCP sunucusuna ait değil.");
                 }
                 var scopes = fields.GetValueOrDefault("scope", "mcp:tools").Split(' ', StringSplitOptions.RemoveEmptyEntries).Distinct().ToArray();
                 if (!scopes.Contains("mcp:tools") || scopes.Any(scope => scope is not ("mcp:tools" or "offline_access")))
+                {
                     return OAuthError("invalid_scope", "mcp:tools kapsamı gereklidir; offline_access isteğe bağlıdır.");
+                }
                 var challenge = fields.GetValueOrDefault("code_challenge", "");
                 if (fields.GetValueOrDefault("code_challenge_method") != "S256" || !Regex.IsMatch(challenge, "\\A[A-Za-z0-9_-]{43}\\z"))
+                {
                     return OAuthError("invalid_request", "PKCE S256 gereklidir.");
+                }
                 if (fields.TryGetValue("response_mode", out var mode) && mode != "query")
+                {
                     return OAuthError("invalid_request", "Yalnızca query yanıt modu desteklenir.");
-                if (HttpMethods.IsGet(context.Request.Method)) return LoginForm();
-                try { await antiforgery.ValidateRequestAsync(context); }
-                catch (AntiforgeryValidationException) { return LoginForm("Formun süresi doldu. Tekrar deneyin.", 400); }
-                if (fields.GetValueOrDefault("decision") == "deny") return Redirect("error", "access_denied");
-                if (fields.GetValueOrDefault("decision") != "allow") return OAuthError("invalid_request", "Bağlantı onayı gereklidir.");
+                }
+                if (HttpMethods.IsGet(context.Request.Method))
+                {
+                    return LoginForm();
+                }
+                try
+                {
+                    await antiforgery.ValidateRequestAsync(context);
+                }
+                catch (AntiforgeryValidationException)
+                {
+                    return LoginForm("Formun süresi doldu. Tekrar deneyin.", 400);
+                }
+                if (fields.GetValueOrDefault("decision") == "deny")
+                {
+                    return Redirect("error", "access_denied");
+                }
+                if (fields.GetValueOrDefault("decision") != "allow")
+                {
+                    return OAuthError("invalid_request", "Bağlantı onayı gereklidir.");
+                }
 
                 var command = new LoginAsync.Command { UserName = fields.GetValueOrDefault("userName", ""), Password = fields.GetValueOrDefault("password", ""), AccessTokenOnly = true };
                 if (!Validator.TryValidateObject(command, new ValidationContext(command), [], true))
+                {
                     return LoginForm("Kullanıcı adı ve parola geçerli biçimde girilmelidir.", 400);
+                }
                 var login = await loginHandler.HandleAsync(command, ct);
-                if (login is null) return LoginForm("Kullanıcı adı veya parola geçersiz.", 401);
+                if (login is null)
+                {
+                    return LoginForm("Kullanıcı adı veya parola geçersiz.", 401);
+                }
                 var validation = await new JsonWebTokenHandler().ValidateTokenAsync(login.AccessToken, jwtOptions.Get(JwtBearerDefaults.AuthenticationScheme).TokenValidationParameters);
                 if (!validation.IsValid || !int.TryParse(validation.ClaimsIdentity.FindFirst("sub")?.Value, out var userId))
+                {
                     throw new InvalidOperationException("Giriş tokenı doğrulanamadı.");
+                }
                 var user = await work.ExecuteQueryAsync(token => users.GetByUserIdAsync(userId, token), ct);
-                if (!CanUseMcp(user)) return Redirect("error", "access_denied");
+                if (!CanUseMcp(user))
+                {
+                    return Redirect("error", "access_denied");
+                }
                 RemoveExpiredCodes();
                 var code = NewToken();
                 authCodes[HashToken(code)] = new(userId, user!.SecurityStamp, clientId, redirectUri, challenge, string.Join(' ', scopes), clock.GetUtcNow().AddMinutes(2));
                 return Redirect("code", code);
 
-                IResult Redirect(string key, string value) => Results.Redirect(QueryHelpers.AddQueryString(redirectUri,
-                    new Dictionary<string, string?> { [key] = value, ["state"] = fields.GetValueOrDefault("state"), ["iss"] = issuer.AbsoluteUri }));
+                IResult Redirect(string key, string value) => Results.Redirect(QueryHelpers.AddQueryString(redirectUri, new Dictionary<string, string?> { [key] = value, ["state"] = fields.GetValueOrDefault("state"), ["iss"] = issuer.AbsoluteUri }));
 
                 IResult LoginForm(string? error = null, int status = 200)
                 {
@@ -317,7 +349,7 @@ namespace UluBilge.Api.Extentions
                     return Results.Content($$"""
                         <!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>UluBilge bağlantısı</title>
                         <style>body{font:16px system-ui;max-width:430px;margin:10vh auto;padding:24px}input{display:block;width:95%;padding:10px;margin:6px 0 18px}button{padding:10px 16px;margin:8px}.error{color:#b42318}</style></head>
-                        <body><h1>UluBilge'e bağlan</h1><p><strong>{{WebUtility.HtmlEncode(client.DisplayName)}}</strong>, ürün satış raporlarını okumak için izin istiyor.</p>
+                        <body><h1>UluBilge'e bağlan</h1><p><strong>{{WebUtility.HtmlEncode(client.DisplayName)}}</strong>, sisteminizdeki raporlarını okumak için izin istiyor.</p>
                         <p>{{(scopes.Contains("offline_access") ? $"Erişim en fazla {jwtSettings.RefreshTokenLifetimeDays} gün boyunca otomatik yenilenebilir." : "Erişim kısa süreliğine verilecektir.")}}</p>
                         <p class="error" role="alert">{{WebUtility.HtmlEncode(error)}}</p><form method="post" action="/oauth/login">{{hidden}}
                         <label>Kullanıcı adı<input name="userName" maxlength="64" autocomplete="username" required></label>
